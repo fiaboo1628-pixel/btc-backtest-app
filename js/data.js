@@ -104,18 +104,47 @@ async function getJson(url, signal) {
     }
     let msg = `HTTP ${r.status}`;
     try { const j = await r.json(); if (j.msg) msg += `: ${j.msg}`; } catch { /* không phải JSON */ }
-    if (r.status === 451 || r.status === 403) msg += " (Binance chặn truy cập từ khu vực/mạng này)";
+    if (r.status === 451 || r.status === 403) msg += " (blocked by Binance for this region/network)";
     throw new Error(msg);
+  }
+}
+
+// Proxy cùng tên miền (api/binance.js khi chạy trên Vercel). Trên host tĩnh khác (GitHub Pages...) nó trả 404
+// và app giữ lỗi gốc.
+const proxyBase = (market) => (typeof location !== "undefined" && /^https?:$/.test(location.protocol)
+  ? `${location.origin}/api/binance/${market === "futures" ? "fapi" : "spot"}` : null);
+const PROXY_KEY = (market) => `viaProxy:${market}`;
+const remembered = (market) => { try { return localStorage.getItem(PROXY_KEY(market)) === "1"; } catch { return false; } };
+const remember = (market) => { try { localStorage.setItem(PROXY_KEY(market), "1"); } catch { /* bộ nhớ bị chặn */ } };
+
+/**
+ * Chọn đường gọi Binance: địa chỉ tự nhập > proxy đã nhớ > gọi thẳng; gọi thẳng lỗi mạng/CORS hoặc bị chặn vùng
+ * (451/403) thì thử proxy cùng tên miền và nhớ lựa chọn.
+ */
+async function resolveBase(market, apiBase, signal) {
+  if (apiBase) return { base: apiBase, via: "custom proxy" };
+  const m = MARKETS[market], px = proxyBase(market);
+  if (px && remembered(market)) return { base: px, via: "app proxy" };
+  const probe = (base) => getJson(`${base}${m.klines}?symbol=BTCUSDT&interval=1h&limit=1`, signal);
+  try {
+    await probe(m.base);
+    return { base: m.base, via: "direct" };
+  } catch (e) {
+    const blocked = e instanceof TypeError || /HTTP (451|403)/.test(e.message);
+    if (e.name === "AbortError" || !px || !blocked) throw e;
+    try { await probe(px); } catch { throw e; }
+    remember(market);
+    return { base: px, via: "app proxy" };
   }
 }
 
 /** Kiểm tra trình duyệt gọi được API Binance không (CORS, chặn vùng). */
 export async function testConnection(market, apiBase) {
   const m = MARKETS[market];
-  const base = apiBase || m.base;
   const t0 = performance.now();
+  const { base, via } = await resolveBase(market, apiBase);
   const rows = await getJson(`${base}${m.klines}?symbol=BTCUSDT&interval=1h&limit=2`);
-  return { ok: Array.isArray(rows) && rows.length > 0, ms: Math.round(performance.now() - t0) };
+  return { ok: Array.isArray(rows) && rows.length > 0, ms: Math.round(performance.now() - t0), via };
 }
 
 /**
@@ -124,14 +153,14 @@ export async function testConnection(market, apiBase) {
  */
 export async function download({ market, symbol, tf, from, apiBase, onProgress, signal }) {
   const m = MARKETS[market];
-  const base = apiBase || m.base;
+  const { base } = await resolveBase(market, apiBase, signal);
   const id = datasetId(market, symbol, tf);
   const existing = await loadDataset(id);
   const ms = TF_MS[tf];
   const now = Date.now();
   const lastClosed = Math.floor(now / ms) * ms - ms;
   let start = existing ? existing.meta.last + ms : Math.floor(from / ms) * ms;
-  if (existing && from < existing.meta.first) start = Math.floor(from / ms) * ms; // mở rộng về quá khứ → tải lại
+  if (existing && from < existing.meta.first) start = Math.floor(from / ms) * ms; // extending into the past → reload
   const cols = Object.fromEntries(COLS.map((k) => [k, []]));
   const total = Math.max(1, Math.ceil((lastClosed - start) / ms / m.limit));
   let done = 0;
@@ -145,7 +174,7 @@ export async function download({ market, symbol, tf, from, apiBase, onProgress, 
       cols.c.push(+r[4]); cols.v.push(+r[5]);
     }
     start = rows[rows.length - 1][0] + ms;
-    onProgress?.({ done: ++done, total, phase: "nến" });
+    onProgress?.({ done: ++done, total, phase: "candles" });
     await sleep(120);                                     // ~8 yêu cầu/giây, dưới giới hạn Binance
   }
   let candles;
@@ -201,7 +230,7 @@ export async function importCsv(text, { market, symbol, tf }) {
     cols.t.push(t);
     for (const [k, i] of [["o", 1], ["h", 2], ["l", 3], ["c", 4], ["v", 5]]) cols[k].push(Number(f[i]));
   }
-  if (!cols.t.length) throw new Error("Không đọc được dòng nào (cần: time,open,high,low,close,volume)");
+  if (!cols.t.length) throw new Error("No rows read (need: time,open,high,low,close,volume)");
   const order = cols.t.map((_, i) => i).sort((a, b) => cols.t[a] - cols.t[b]);
   const candles = Object.fromEntries(COLS.map((k) => [k, Float64Array.from(order, (i) => cols[k][i])]));
   const id = datasetId(market, symbol, tf);

@@ -6,13 +6,14 @@ import { DEFAULT_EXIT, DEFAULT_ACCOUNT } from "./engine.js";
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const fmt = (n, d = 2) => (n == null || !Number.isFinite(n)) ? "–" : n.toLocaleString("vi-VN", { minimumFractionDigits: d, maximumFractionDigits: d });
+const fmt = (n, d = 2) => (n == null || !Number.isFinite(n)) ? "–" : n.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+const fmtInt = (n) => Math.round(n).toLocaleString("en-US");
 const sign = (n, d = 1) => (n > 0 ? "+" : "") + fmt(n, d);
 const cls = (n) => (n > 0 ? "up" : n < 0 ? "down" : "");
 const day = (t) => new Date(t).toISOString().slice(0, 10);
 const store = {
   get: (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
-  set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* bộ nhớ trình duyệt bị chặn */ } },
+  set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage blocked */ } },
 };
 function toast(text, kind = "ok") {
   const el = $("#toast");
@@ -20,7 +21,7 @@ function toast(text, kind = "ok") {
   if (text) el.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
-// ============================================================== trạng thái
+// ============================================================== state
 const state = {
   presets: [],
   strategy: null,
@@ -81,36 +82,38 @@ function hideTabbarWithKeyboard() {
   update();
 }
 
-// ============================================================== DỮ LIỆU
+// ============================================================== data
 function dlHint() {
   const tf = $("#dlTf").value, from = Date.parse($("#dlFrom").value) || Date.now();
   const n = Math.max(0, (Date.now() - from) / TF_MS[tf]);
   const reqs = Math.ceil(n / 1000);
   const mb = (n * 6 * 8) / 1e6;
-  $("#dlHint").textContent = `≈ ${Math.round(n).toLocaleString("vi-VN")} nến · ${reqs} lần gọi API · ~${fmt(reqs * 0.14 / 60, 1)} phút · ~${fmt(mb, 0)} MB`
-    + (tf === "1m" && n > 300000 ? " — khung 1m nên tải tối đa khoảng 6 tháng." : "");
+  const secs = reqs * 0.14;
+  $("#dlHint").textContent = `~${fmtInt(n)} candles · ${secs < 90 ? `${Math.ceil(secs)} s` : `${fmt(secs / 60, 1)} min`} · ${fmt(mb, 0)} MB`
+    + (tf === "1m" && n > 300000 ? " · 1m: keep it under ~6 months" : "");
 }
 
 async function refreshDatasets() {
   const list = (await Data.listDatasets()).sort((a, b) => a.id.localeCompare(b.id));
   const box = $("#dsList");
-  if (!list.length) { box.innerHTML = `<p class="note">Chưa có dữ liệu. Tải ở trên hoặc nhập CSV.</p>`; }
+  if (!list.length) { box.innerHTML = `<p class="hint">Nothing yet.</p>`; }
   else {
-    box.innerHTML = list.map((m) => `
-      <div class="item ${m.id === state.activeId ? "active" : ""}" data-id="${esc(m.id)}">
-        <b>${esc(m.symbol)} · ${esc(m.tf)} · ${m.market === "futures" ? "Futures" : "Spot"}</b>
-        <span class="note">${day(m.first)} → ${day(m.last)} · ${m.count.toLocaleString("vi-VN")} nến${m.funding?.length ? ` · ${m.funding.length} mốc funding` : ""}</span>
-        <div class="row">
-          <button class="btn sm ${m.id === state.activeId ? "primary" : ""}" data-act="use" type="button">${m.id === state.activeId ? "Đang dùng" : "Dùng"}</button>
-          <button class="btn sm" data-act="update" type="button">Cập nhật</button>
-          <button class="btn sm" data-act="csv" type="button">Xuất CSV</button>
-          <button class="btn sm danger" data-act="del" type="button">Xoá</button>
-        </div>
-      </div>`).join("");
+    box.innerHTML = list.map((m) => {
+      const on = m.id === state.activeId;
+      return `<div class="ds ${on ? "active" : ""}" data-id="${esc(m.id)}">
+        <button class="ds-main" data-act="use" type="button" aria-pressed="${on}">
+          <b>${esc(m.symbol)} ${esc(m.tf)} <span class="tag">${m.market === "futures" ? "F" : "S"}</span></b>
+          <span class="hint">${day(m.first)} → ${day(m.last)} · ${fmtInt(m.count)}</span>
+        </button>
+        <button class="icon" data-act="update" type="button" aria-label="Update" title="Update">↻</button>
+        <button class="icon" data-act="csv" type="button" aria-label="Export CSV" title="Export CSV">⤓</button>
+        <button class="icon danger" data-act="del" type="button" aria-label="Delete" title="Delete">✕</button>
+      </div>`;
+    }).join("");
   }
   if (navigator.storage?.estimate) {
     const e = await navigator.storage.estimate();
-    $("#storageInfo").textContent = `Đang dùng ${fmt((e.usage || 0) / 1e6, 1)} MB bộ nhớ trình duyệt.`;
+    $("#storageInfo").textContent = `${fmt((e.usage || 0) / 1e6, 1)} MB`;
   }
   if (!list.find((m) => m.id === state.activeId) && list.length) await useDataset(list[0].id);
   else if (!list.length) { state.activeId = null; state.dataset = null; updateDsLabel(); }
@@ -125,7 +128,7 @@ async function useDataset(id) {
 }
 function updateDsLabel() {
   const m = state.dataset?.meta;
-  $("#dsLabel").textContent = m ? `${m.symbol} ${m.tf} ${m.market === "futures" ? "Futures" : "Spot"} · ${day(m.first)} → ${day(m.last)}` : "Chưa chọn dữ liệu";
+  $("#dsLabel").textContent = m ? `${m.symbol} ${m.tf} ${m.market === "futures" ? "Futures" : "Spot"} · ${day(m.first)} → ${day(m.last)}` : "No data";
 }
 
 async function startDownload(opts) {
@@ -139,25 +142,25 @@ async function startDownload(opts) {
       ...opts, apiBase: $("#apiBase").value.trim() || undefined, signal: ctl.signal,
       onProgress: ({ done, total, phase }) => {
         prog.firstElementChild.style.width = `${Math.min(100, (done / total) * 100)}%`;
-        $("#dlStatus").textContent = `Đang tải ${phase}: ${done}/${total}`;
+        $("#dlStatus").textContent = `${phase} ${done}/${total}`;
       },
     });
     $("#dlStatus").textContent = "";
-    toast(`Xong: thêm ${r.added.toLocaleString("vi-VN")} nến, tổng ${r.count.toLocaleString("vi-VN")} nến.`);
+    toast(`Done: +${fmtInt(r.added)} candles (${fmtInt(r.count)} total).`);
     await useDataset(r.id);
   } catch (e) {
     $("#dlStatus").textContent = "";
-    toast(e.name === "AbortError" ? "Đã dừng tải." : `Lỗi tải dữ liệu: ${e.message}${e.message.startsWith("Failed to fetch") || e.message.includes("NetworkError") ? "\nCó thể trình duyệt không được phép gọi Binance trực tiếp (CORS) — thử \"Kiểm tra kết nối\" hoặc dùng proxy." : ""}`, "err");
+    toast(e.name === "AbortError" ? "Stopped." : `Download failed: ${e.message}`, "err");
   } finally {
     prog.classList.add("hidden"); $("#btnDownload").disabled = false; $("#btnCancel").hidden = true; state.abort = null;
   }
 }
 
-// ============================================================== CHIẾN LƯỢC
+// ============================================================== strategy
 const clone = (x) => JSON.parse(JSON.stringify(x));
 function normalize(s) {
   return {
-    name: s.name || "Chiến lược", description: s.description || "", tradeTf: s.tradeTf || "15m",
+    name: s.name || "Strategy", description: s.description || "", tradeTf: s.tradeTf || "15m",
     long: s.long || [], short: s.short || [],
     exit: { ...DEFAULT_EXIT, ...s.exit }, account: { ...DEFAULT_ACCOUNT, ...s.account },
   };
@@ -167,9 +170,9 @@ function persistCurrent() { store.set("currentStrategy", state.strategy); }
 
 function refreshPick() {
   const mine = saved();
-  $("#stPick").innerHTML = `<option value="">— chọn —</option>
-    <optgroup label="Mẫu có sẵn">${state.presets.map((p, i) => `<option value="p:${i}">${esc(p.name)}</option>`).join("")}</optgroup>
-    ${Object.keys(mine).length ? `<optgroup label="Đã lưu">${Object.keys(mine).map((n) => `<option value="s:${esc(n)}">${esc(n)}</option>`).join("")}</optgroup>` : ""}`;
+  $("#stPick").innerHTML = `<option value="">—</option>
+    <optgroup label="Presets">${state.presets.map((p, i) => `<option value="p:${i}">${esc(p.name)}</option>`).join("")}</optgroup>
+    ${Object.keys(mine).length ? `<optgroup label="Saved">${Object.keys(mine).map((n) => `<option value="s:${esc(n)}">${esc(n)}</option>`).join("")}</optgroup>` : ""}`;
 }
 
 function refreshTfOptions() {
@@ -177,9 +180,7 @@ function refreshTfOptions() {
   const opts = TF_LIST.filter((tf) => TF_MS[tf] >= minMs);
   const cur = state.strategy.tradeTf;
   $("#stTf").innerHTML = opts.map((tf) => `<option ${tf === cur ? "selected" : ""}>${tf}</option>`).join("");
-  $("#tfNote").textContent = state.dataset
-    ? (TF_MS[cur] < minMs ? `Dữ liệu đang dùng là khung ${state.dataset.meta.tf}: không chạy được khung ${cur}.` : `Khung lớn hơn ${state.dataset.meta.tf} được ghép tự động từ dữ liệu đã tải.`)
-    : "Chưa chọn dữ liệu.";
+  $("#tfNote").textContent = state.dataset && TF_MS[cur] < minMs ? `Data is ${state.dataset.meta.tf}: can't run ${cur}.` : "";
   renderConds();
 }
 
@@ -187,18 +188,21 @@ function renderStrategy() {
   const s = state.strategy;
   $("#stName").value = s.name;
   refreshTfOptions();
-  const exitDefs = [
-    ["rAtr", "1R = ? × ATR(14)", 0.5, 10, 0.1], ["trailStartR", "Kích hoạt trailing tại (R)", 0.5, 10, 0.1],
-    ["trailDistR", "Khoảng trailing (R)", 0.1, 5, 0.1], ["maxHoldBars", "Giữ tối đa (nến, 0 = không)", 0, 5000, 1],
+  // [group, key, label, tooltip, min, max, step]
+  const defs = [
+    ["exit", "rAtr", "Stop (×ATR)", "1R = initial stop distance = this × ATR(14)", 0.5, 10, 0.1],
+    ["exit", "trailStartR", "Trail at (R)", "Start trailing once profit reaches this many R", 0.5, 10, 0.1],
+    ["exit", "trailDistR", "Trail gap (R)", "Trailing stop distance from the high/low, in R", 0.1, 5, 0.1],
+    ["exit", "maxHoldBars", "Max bars", "Close after this many bars (0 = off)", 0, 5000, 1],
+    ["account", "wallet", "Capital", "Starting balance (USDT)", 10, 1e9, 1],
+    ["account", "riskPct", "Risk %", "Balance lost if the initial stop is hit", 0.05, 10, 0.05],
+    ["account", "maxLev", "Max lev", "Leverage cap", 1, 50, 1],
+    ["account", "fee", "Fee %", "Per side", 0, 1, 0.001],
   ];
-  $("#exitFields").innerHTML = exitDefs.map(([k, label, min, max, st]) =>
-    `<label>${label}<input type="number" data-exit="${k}" min="${min}" max="${max}" step="${st}" value="${s.exit[k]}" inputmode="decimal"></label>`).join("");
-  const accDefs = [
-    ["wallet", "Vốn ban đầu (USDT)", 10, 1e9, 1], ["riskPct", "Rủi ro mỗi lệnh (% vốn)", 0.05, 10, 0.05],
-    ["maxLev", "Đòn bẩy tối đa", 1, 50, 1], ["fee", "Phí mỗi chiều (%)", 0, 1, 0.001],
-  ];
-  $("#accFields").innerHTML = accDefs.map(([k, label, min, max, st]) =>
-    `<label>${label}<input type="number" data-acc="${k}" min="${min}" max="${max}" step="${st}" value="${k === "fee" ? +(s.account.fee * 100).toFixed(4) : s.account[k]}" inputmode="decimal"></label>`).join("");
+  $("#exitFields").innerHTML = defs.map(([g, k, label, tip, min, max, st]) => {
+    const v = k === "fee" ? +(s.account.fee * 100).toFixed(4) : s[g][k];
+    return `<label title="${esc(tip)}">${label}<input type="number" data-${g === "exit" ? "exit" : "acc"}="${k}" min="${min}" max="${max}" step="${st}" value="${v}" inputmode="decimal"></label>`;
+  }).join("");
 }
 
 function renderConds() {
@@ -207,9 +211,8 @@ function renderConds() {
     box.innerHTML = "";
     state.strategy[side].forEach((cond, i) => box.appendChild(condEl(side, i, cond)));
   }
-  $("#shortNote").textContent = state.dataset?.meta.market === "spot"
-    ? "Dữ liệu Spot: backtest vẫn tính Short như futures để tham khảo."
-    : "Để trống = không đánh Short.";
+  if (!state.strategy.long.length) $("#condLong").innerHTML = `<p class="hint">Empty = no longs</p>`;
+  if (!state.strategy.short.length) $("#condShort").innerHTML = `<p class="hint">Empty = no shorts</p>`;
 }
 
 function condEl(side, i, cond) {
@@ -218,17 +221,17 @@ function condEl(side, i, cond) {
   const groups = [...new Set(CATALOG.map((x) => x.group))];
   $(".c-ind", el).innerHTML = groups.map((g) => `<optgroup label="${esc(g)}">${CATALOG.filter((x) => x.group === g)
     .map((x) => `<option value="${x.id}" ${x.id === cond.ind ? "selected" : ""}>${esc(x.label)}</option>`).join("")}</optgroup>`).join("");
+  $(".c-ind", el).title = def.help;
   const params = paramsWithDefaults(cond.ind, cond.params);
   $(".c-params", el).innerHTML = def.params.map((p) =>
     `<label>${esc(p.label)}<input type="number" data-p="${p.key}" min="${p.min}" max="${p.max}" step="${p.step}" value="${params[p.key]}" inputmode="decimal"></label>`).join("");
   const minMs = Math.max(TF_MS[state.strategy.tradeTf], TF_MS[state.dataset?.meta.tf || "1m"]);
-  $(".c-tf", el).innerHTML = `<option value="">= GD</option>` + TF_LIST.filter((tf) => TF_MS[tf] > minMs)
+  $(".c-tf", el).innerHTML = `<option value="">—</option>` + TF_LIST.filter((tf) => TF_MS[tf] > minMs)
     .map((tf) => `<option ${tf === cond.tf ? "selected" : ""}>${tf}</option>`).join("");
   $(".c-op", el).innerHTML = Object.entries(OPS).map(([k, o]) => `<option value="${k}" ${k === cond.op ? "selected" : ""}>${o.label}</option>`).join("");
   const [lo, hi, st] = def.range;
   const val = $(".c-val", el), rng = $(".c-range", el);
   val.value = cond.value; rng.min = lo; rng.max = hi; rng.step = st; rng.value = cond.value;
-  $(".c-help", el).textContent = def.help;
   const upd = (fn) => { fn(state.strategy[side][i]); persistCurrent(); };
   $(".c-ind", el).addEventListener("change", (e) => {
     const d = CATALOG_BY_ID[e.target.value];
@@ -250,7 +253,7 @@ function loadStrategy(s) {
   persistCurrent(); renderStrategy();
 }
 
-// ============================================================== KẾT QUẢ
+// ============================================================== results
 let worker = null, runId = 0;
 function getWorker() {
   worker ??= new Worker(new URL("./worker.js", import.meta.url), { type: "module" });
@@ -266,14 +269,14 @@ function attempts() {
 }
 
 async function runBacktest() {
-  if (!state.dataset) { showTab("data"); toast("Chưa có dữ liệu: tải hoặc chọn dữ liệu trước.", "err"); return; }
+  if (!state.dataset) { showTab("data"); toast("Download or pick data first.", "err"); return; }
   const s = state.strategy;
-  if (!s.long.length && !s.short.length) { showTab("strategy"); toast("Chiến lược chưa có điều kiện nào.", "err"); return; }
+  if (!s.long.length && !s.short.length) { showTab("strategy"); toast("Add at least one condition.", "err"); return; }
   showTab("result");
   const n = attempts();
   $("#attemptWarn").innerHTML = n >= 15
-    ? `<div class="msg warn">Đã thử ${n} biến thể của "${esc(s.name)}". Càng thử nhiều, kết quả đẹp càng dễ là do may mắn — hãy tin Giai đoạn 2 và dry-run hơn là con số tổng.</div>` : "";
-  const btn = $("#btnRun"), label = $("#btnRun span"); btn.disabled = true; label.textContent = "Đang chạy";
+    ? `<div class="msg warn">${n} variants tried — good results get likelier by luck. Trust P2 and dry-run.</div>` : "";
+  const btn = $("#btnRun"), label = $("#btnRun span"); btn.disabled = true; label.textContent = "…";
   const { candles, funding, meta } = state.dataset;
   const id = ++runId;
   const from = Date.parse($("#rFrom").value) || meta.first, to = $("#rTo").value ? Date.parse($("#rTo").value) : null;
@@ -285,7 +288,7 @@ async function runBacktest() {
     w.addEventListener("message", h);
     w.postMessage({ id, source: candles, sourceTf: meta.tf, funding: meta.market === "futures" ? funding : [], strategy: s, split, from, to });
   });
-  btn.disabled = false; label.textContent = "Chạy";
+  btn.disabled = false; label.textContent = "Run";
   if (!res.ok) { toast(res.error, "err"); return; }
   toast("");
   renderResult(res, performance.now() - t0);
@@ -295,20 +298,19 @@ function renderResult(r, ms) {
   $("#resBox").hidden = false;
   requestAnimationFrame(() => $("#resBox").scrollIntoView({ behavior: "smooth", block: "start" }));
   const s = state.strategy;
-  $("#resMeta").textContent = `${s.name} · ${s.tradeTf} · ${r.candles.toLocaleString("vi-VN")} nến · tín hiệu ${r.signals.long} Long / ${r.signals.short} Short · ${fmt(ms / 1000, 1)} giây`;
+  $("#resMeta").textContent = `${s.name} · ${s.tradeTf} · ${fmtInt(r.candles)} bars · ${fmt(ms / 1000, 1)} s`;
   const P = r.periods;
   const row = (label, f) => `<tr><td>${label}</td>${P.map((p) => `<td>${f(p)}</td>`).join("")}</tr>`;
   const my = (t) => { const d = new Date(t); return `${String(d.getUTCMonth() + 1).padStart(2, "0")}/${String(d.getUTCFullYear()).slice(2)}`; };
-  $("#resPeriods").innerHTML = `<thead><tr><th></th>${P.map((p) => `<th>${p.name.replace("Giai đoạn", "GĐ")}<br><small>${my(p.from)}–${my(p.to)}</small></th>`).join("")}</tr></thead><tbody>
-    ${row("Lợi nhuận", (p) => `<b class="${cls(p.profitPct)}">${sign(p.profitPct)}%</b>`)}
-    ${row("Mỗi năm", (p) => `<span class="${cls(p.cagrPct)}">${sign(p.cagrPct)}%</span>`)}
-    ${row("Sụt giảm", (p) => `${fmt(p.maxDDPct, 1)}%`)}
-    ${row("Profit factor", (p) => fmt(p.profitFactor))}
-    ${row("Số lệnh", (p) => p.trades)}
-    ${row("Long / Short", (p) => `${p.long} / ${p.short}`)}
-    ${row("Tỉ lệ thắng", (p) => `${fmt(p.winrate * 100, 1)}%`)}
-    ${row("Giá tài sản", (p) => `<span class="${cls(p.marketPct)}">${sign(p.marketPct)}%</span>`)}</tbody>`;
-  // đường vốn
+  $("#resPeriods").innerHTML = `<thead><tr><th></th>${P.map((p) => `<th>${p.name}<br><small>${my(p.from)}–${my(p.to)}</small></th>`).join("")}</tr></thead><tbody>
+    ${row("Return", (p) => `<b class="${cls(p.profitPct)}">${sign(p.profitPct)}%</b>`)}
+    ${row("CAGR", (p) => `<span class="${cls(p.cagrPct)}">${sign(p.cagrPct)}%</span>`)}
+    ${row("Max DD", (p) => `${fmt(p.maxDDPct, 1)}%`)}
+    ${row("PF", (p) => fmt(p.profitFactor))}
+    ${row("Trades", (p) => `${p.trades} <small>${p.long}L/${p.short}S</small>`)}
+    ${row("Win rate", (p) => `${fmt(p.winrate * 100, 1)}%`)}
+    ${row("Buy &amp; hold", (p) => `<span class="${cls(p.marketPct)}">${sign(p.marketPct)}%</span>`)}</tbody>`;
+  // equity curve
   const eq = r.equity, W = 600, H = 160, pad = 6;
   if (eq.length > 1) {
     const xs = eq.map((e) => e[0]), ys = eq.map((e) => e[1]);
@@ -321,23 +323,23 @@ function renderResult(r, ms) {
       ${split ? `<line x1="${split}" x2="${split}" y1="0" y2="${H}" stroke="var(--muted)" stroke-dasharray="3 5"/>` : ""}
       <polyline points="${pts}" fill="none" stroke="${col}" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
   } else $("#eqChart").innerHTML = "";
-  $("#resYears").innerHTML = `<thead><tr><th>Năm</th><th>Lệnh</th><th>Lãi/lỗ</th><th>PF</th></tr></thead><tbody>${P[0].years
+  $("#resYears").innerHTML = `<thead><tr><th>Year</th><th>Trades</th><th>PnL</th><th>PF</th></tr></thead><tbody>${P[0].years
     .map((y) => `<tr><td>${y.year}</td><td>${y.trades}</td><td class="${cls(y.pnl)}">${sign(y.pnl, 0)}</td><td>${fmt(y.pf)}</td></tr>`).join("")}</tbody>`;
-  const names = { stop_loss: "dính stoploss", trailing: "trailing", time: "hết thời gian", end: "đóng cuối kỳ" };
-  $("#resExits").textContent = Object.entries(r.exitReasons).map(([k, v]) => `${names[k] || k}: ${v}`).join(" · ") || "Không có lệnh.";
-  $("#resTrades").innerHTML = `<thead><tr><th>Ra</th><th>Chiều</th><th>Vào</th><th>Ra</th><th>Lãi/lỗ</th><th>Lý do</th></tr></thead><tbody>${r.trades.slice(0, 100)
+  const names = { stop_loss: "stop", trailing: "trail", time: "time", end: "end" };
+  $("#resExits").innerHTML = Object.entries(r.exitReasons).map(([k, v]) => `<span class="chip">${names[k] || k} ${v}</span>`).join("") || `<span class="hint">No trades</span>`;
+  $("#resTrades").innerHTML = `<thead><tr><th>Exit time</th><th>Side</th><th>Entry</th><th>Exit</th><th>PnL</th><th>Why</th></tr></thead><tbody>${r.trades.slice(0, 100)
     .map((x) => `<tr><td>${new Date(x.exitT).toISOString().slice(0, 16).replace("T", " ")}</td><td class="${x.dir === 1 ? "up" : "down"}">${x.dir === 1 ? "Long" : "Short"}</td>
       <td>${fmt(x.entry, 1)}</td><td>${fmt(x.exit, 1)}</td><td class="${cls(x.pnl)}">${sign(x.pnl, 2)}</td><td>${names[x.reason] || x.reason}</td></tr>`).join("")}</tbody>`;
 }
 
-// ============================================================== khởi động
+// ============================================================== init
 async function init() {
   document.querySelectorAll(".tabbar [data-tab]").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
   $("#btnRun").addEventListener("click", runBacktest);
   enableSwipe();
   hideTabbarWithKeyboard();
 
-  // dữ liệu
+  // data
   $("#apiBase").value = store.get("apiBase", "");
   $("#apiBase").addEventListener("change", (e) => store.set("apiBase", e.target.value.trim()));
   ["#dlTf", "#dlFrom"].forEach((s) => $(s).addEventListener("change", dlHint)); dlHint();
@@ -349,9 +351,9 @@ async function init() {
   $("#btnTest").addEventListener("click", async () => {
     try {
       const r = await Data.testConnection($("#dlMarket").value, $("#apiBase").value.trim() || undefined);
-      toast(r.ok ? `Kết nối Binance được (${r.ms} ms).` : "Binance trả về dữ liệu rỗng.", r.ok ? "ok" : "warn");
+      toast(r.ok ? `Binance OK · ${r.via} · ${r.ms} ms` : "Binance returned no data.", r.ok ? "ok" : "warn");
     } catch (e) {
-      toast(`Không gọi được Binance: ${e.message}\nNếu là lỗi mạng/CORS, cần dùng proxy (mục Nâng cao) hoặc nhập CSV.`, "err");
+      toast(`Can't reach Binance: ${e.message}. Try a proxy or CSV (Advanced).`, "err");
     }
   });
   $("#dsList").addEventListener("click", async (e) => {
@@ -360,7 +362,7 @@ async function init() {
     const meta = (await Data.listDatasets()).find((m) => m.id === id);
     if (b.dataset.act === "use") await useDataset(id);
     if (b.dataset.act === "update") await startDownload({ market: meta.market, symbol: meta.symbol, tf: meta.tf, from: meta.first });
-    if (b.dataset.act === "del" && confirm(`Xoá dữ liệu ${id}?`)) { await Data.deleteDataset(id); await refreshDatasets(); }
+    if (b.dataset.act === "del" && confirm(`Delete ${id}?`)) { await Data.deleteDataset(id); await refreshDatasets(); }
     if (b.dataset.act === "csv") {
       const d = await Data.loadDataset(id);
       const a = Object.assign(document.createElement("a"), {
@@ -372,39 +374,39 @@ async function init() {
     const f = e.target.files[0]; if (!f) return;
     try {
       const r = await Data.importCsv(await f.text(), { market: $("#csvMarket").value, symbol: $("#csvSymbol").value.trim(), tf: $("#csvTf").value });
-      toast(`Đã nhập ${r.count.toLocaleString("vi-VN")} nến.`); await useDataset(r.id);
+      toast(`Imported ${fmtInt(r.count)} candles.`); await useDataset(r.id);
     } catch (err) { toast(err.message, "err"); }
     e.target.value = "";
   });
 
-  // chiến lược
+  // strategy
   const names = await fetch("presets/index.json").then((r) => r.json()).catch(() => []);
   state.presets = await Promise.all(names.map((n) => fetch(`presets/${n}`).then((r) => r.json())));
-  state.strategy = normalize(store.get("currentStrategy", null) || state.presets[0] || { name: "Chiến lược mới" });
+  state.strategy = normalize(store.get("currentStrategy", null) || state.presets[0] || { name: "New strategy" });
   refreshPick(); renderStrategy();
   $("#stPick").addEventListener("change", (e) => {
     const v = e.target.value; if (!v) return;
     loadStrategy(v.startsWith("p:") ? state.presets[+v.slice(2)] : saved()[v.slice(2)]);
     e.target.value = "";
   });
-  $("#stName").addEventListener("change", (e) => { state.strategy.name = e.target.value.trim() || "Chiến lược"; persistCurrent(); });
+  $("#stName").addEventListener("change", (e) => { state.strategy.name = e.target.value.trim() || "Strategy"; persistCurrent(); });
   $("#stTf").addEventListener("change", (e) => { state.strategy.tradeTf = e.target.value; persistCurrent(); refreshTfOptions(); });
   document.querySelectorAll("[data-add]").forEach((b) => b.addEventListener("click", () => {
     state.strategy[b.dataset.add].push({ ind: "rsi", params: { n: 14 }, op: b.dataset.add === "long" ? "<=" : ">=", value: b.dataset.add === "long" ? 30 : 70 });
     persistCurrent(); renderConds();
   }));
   $("#exitFields").addEventListener("change", (e) => { const k = e.target.dataset.exit; if (k) { state.strategy.exit[k] = Number(e.target.value); persistCurrent(); } });
-  $("#accFields").addEventListener("change", (e) => {
+  $("#exitFields").addEventListener("change", (e) => {
     const k = e.target.dataset.acc; if (!k) return;
     state.strategy.account[k] = k === "fee" ? Number(e.target.value) / 100 : Number(e.target.value); persistCurrent();
   });
   $("#btnSave").addEventListener("click", () => {
     const all = saved(); all[state.strategy.name] = clone(state.strategy); store.set("strategies", all); refreshPick();
-    toast(`Đã lưu "${state.strategy.name}".`);
+    toast(`Saved "${state.strategy.name}".`);
   });
   $("#btnDelete").addEventListener("click", () => {
-    const all = saved(); if (!all[state.strategy.name]) { toast("Chiến lược này chưa được lưu.", "warn"); return; }
-    if (!confirm(`Xoá "${state.strategy.name}" khỏi danh sách đã lưu?`)) return;
+    const all = saved(); if (!all[state.strategy.name]) { toast("Not saved yet.", "warn"); return; }
+    if (!confirm(`Delete "${state.strategy.name}"?`)) return;
     delete all[state.strategy.name]; store.set("strategies", all); refreshPick();
   });
   $("#btnExport").addEventListener("click", () => {
@@ -415,7 +417,7 @@ async function init() {
   });
   $("#importJson").addEventListener("change", async (e) => {
     const f = e.target.files[0]; if (!f) return;
-    try { loadStrategy(JSON.parse(await f.text())); toast("Đã nhập chiến lược."); } catch (err) { toast(`File không hợp lệ: ${err.message}`, "err"); }
+    try { loadStrategy(JSON.parse(await f.text())); toast("Imported."); } catch (err) { toast(`Invalid file: ${err.message}`, "err"); }
     e.target.value = "";
   });
 

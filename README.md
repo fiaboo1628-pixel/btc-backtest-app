@@ -48,7 +48,7 @@ tạo bằng `tools/export_parity.py`; thiếu fixture thì test đó được b
 ## Cấu trúc
 
 ```
-index.html, css/app.css      giao diện (tiếng Việt, ưu tiên điện thoại)
+index.html, css/app.css      giao diện (tiếng Anh, gọn, ưu tiên điện thoại)
 js/app.js                    điều khiển giao diện
 js/data.js                   tải Binance, IndexedDB, CSV
 js/indicators.js             chỉ báo (khớp TA-Lib)
