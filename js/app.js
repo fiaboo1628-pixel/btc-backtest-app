@@ -30,11 +30,55 @@ const state = {
 };
 
 // ============================================================== tabs
+const TABS = ["data", "strategy", "result"];
+let currentTab = "data";
+const tabScroll = {};
 function showTab(name) {
+  if (name === currentTab) return;
   toast("");
-  document.querySelectorAll(".tab").forEach((s) => (s.hidden = s.id !== `tab-${name}`));
+  tabScroll[currentTab] = window.scrollY;                    // nhớ vị trí cuộn của tab đang rời
+  const dir = TABS.indexOf(name) > TABS.indexOf(currentTab) ? "next" : "prev";
+  currentTab = name;
+  document.querySelectorAll(".tab").forEach((s) => {
+    const on = s.id === `tab-${name}`;
+    s.hidden = !on;
+    s.classList.remove("in-next", "in-prev");
+    if (on) { void s.offsetWidth; s.classList.add(`in-${dir}`); } // chạy lại hiệu ứng trượt
+  });
   document.querySelectorAll(".tabbar [data-tab]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.tab === name));
-  window.scrollTo({ top: 0 });
+  window.scrollTo({ top: tabScroll[name] || 0, behavior: "instant" });
+}
+
+// Vuốt ngang để đổi tab (bỏ qua khi kéo thanh trượt, cuộn bảng, đang gõ chữ, hoặc bắt đầu sát mép màn hình —
+// mép trái là cử chỉ "quay lại" của iOS)
+function enableSwipe() {
+  let x0 = 0, y0 = 0, t0 = 0, ok = false;
+  // lắng nghe cả trang (tab ngắn thì vùng trống bên dưới cũng vuốt được), trừ thanh trên và thanh tab
+  document.addEventListener("touchstart", (e) => {
+    const t = e.touches[0];
+    ok = e.touches.length === 1 && t.clientX > 24 && t.clientX < innerWidth - 24
+      && !e.target.closest("input[type=range], textarea, .tablewrap, .appbar, .tabbar")
+      && !(e.target === document.activeElement && e.target.matches("input, select")); // đang gõ/chọn
+    x0 = t.clientX; y0 = t.clientY; t0 = Date.now();
+  }, { passive: true });
+  document.addEventListener("touchend", (e) => {
+    if (!ok) return;
+    const t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0;
+    if (Date.now() - t0 > 600 || Math.abs(dx) < 70 || Math.abs(dy) > Math.abs(dx) * 0.6) return;
+    const i = TABS.indexOf(currentTab) + (dx < 0 ? 1 : -1);
+    if (i >= 0 && i < TABS.length) showTab(TABS[i]);
+  }, { passive: true });
+}
+
+// Ẩn thanh tab khi bàn phím mở (iOS đẩy thanh cố định lên trên bàn phím).
+// Dựa vào vùng hiển thị bị thu hẹp chứ không dựa vào focus: ô ngày/ô chọn trên iOS mở bộ chọn,
+// không mở bàn phím, và vẫn giữ focus sau khi chọn xong.
+function hideTabbarWithKeyboard() {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const update = () => document.body.classList.toggle("kb", window.innerHeight - vv.height > 150);
+  vv.addEventListener("resize", update);
+  update();
 }
 
 // ============================================================== DỮ LIỆU
@@ -229,7 +273,7 @@ async function runBacktest() {
   const n = attempts();
   $("#attemptWarn").innerHTML = n >= 15
     ? `<div class="msg warn">Đã thử ${n} biến thể của "${esc(s.name)}". Càng thử nhiều, kết quả đẹp càng dễ là do may mắn — hãy tin Giai đoạn 2 và dry-run hơn là con số tổng.</div>` : "";
-  const btn = $("#btnRun"); btn.disabled = true; btn.textContent = "Đang chạy…";
+  const btn = $("#btnRun"), label = $("#btnRun span"); btn.disabled = true; label.textContent = "Đang chạy";
   const { candles, funding, meta } = state.dataset;
   const id = ++runId;
   const from = Date.parse($("#rFrom").value) || meta.first, to = $("#rTo").value ? Date.parse($("#rTo").value) : null;
@@ -241,7 +285,7 @@ async function runBacktest() {
     w.addEventListener("message", h);
     w.postMessage({ id, source: candles, sourceTf: meta.tf, funding: meta.market === "futures" ? funding : [], strategy: s, split, from, to });
   });
-  btn.disabled = false; btn.textContent = "Chạy ▶";
+  btn.disabled = false; label.textContent = "Chạy";
   if (!res.ok) { toast(res.error, "err"); return; }
   toast("");
   renderResult(res, performance.now() - t0);
@@ -249,6 +293,7 @@ async function runBacktest() {
 
 function renderResult(r, ms) {
   $("#resBox").hidden = false;
+  requestAnimationFrame(() => $("#resBox").scrollIntoView({ behavior: "smooth", block: "start" }));
   const s = state.strategy;
   $("#resMeta").textContent = `${s.name} · ${s.tradeTf} · ${r.candles.toLocaleString("vi-VN")} nến · tín hiệu ${r.signals.long} Long / ${r.signals.short} Short · ${fmt(ms / 1000, 1)} giây`;
   const P = r.periods;
@@ -289,6 +334,8 @@ function renderResult(r, ms) {
 async function init() {
   document.querySelectorAll(".tabbar [data-tab]").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
   $("#btnRun").addEventListener("click", runBacktest);
+  enableSwipe();
+  hideTabbarWithKeyboard();
 
   // dữ liệu
   $("#apiBase").value = store.get("apiBase", "");
