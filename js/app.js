@@ -1,4 +1,3 @@
-import { inject } from "@vercel/analytics";
 import * as Data from "./data.js";
 import { CATALOG, CATALOG_BY_ID, paramsWithDefaults } from "./catalog.js";
 import { OPS } from "./rules.js";
@@ -6,7 +5,8 @@ import { TF_MS, TF_LIST } from "./timeframes.js";
 import { DEFAULT_EXIT, DEFAULT_ACCOUNT } from "./engine.js";
 
 // Initialize Vercel Web Analytics
-inject();
+// thống kê truy cập (Vercel Analytics): tải không bắt buộc — lỗi/offline thì bỏ qua, app vẫn chạy
+import("@vercel/analytics").then((m) => m.inject()).catch(() => {});
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -203,8 +203,9 @@ function renderStrategy() {
   // [group, key, label, tooltip, min, max, step]
   const defs = [
     ["exit", "rAtr", "Stop (×ATR)", "1R = initial stop distance = this × ATR(14)", 0.5, 10, 0.1],
-    ["exit", "trailStartR", "Trail at (R)", "Start trailing once profit reaches this many R", 0.5, 10, 0.1],
+    ["exit", "trailStartR", "Trail at (R)", "Start trailing once profit reaches this many R (0 = no trailing)", 0, 10, 0.1],
     ["exit", "trailDistR", "Trail gap (R)", "Trailing stop distance from the high/low, in R", 0.1, 5, 0.1],
+    ["exit", "tpR", "Take profit (R)", "Fixed take-profit at this many R (0 = off)", 0, 20, 0.1],
     ["exit", "maxHoldBars", "Max bars", "Close after this many bars (0 = off)", 0, 5000, 1],
     ["account", "wallet", "Capital", "Starting balance (USDT)", 10, 1e9, 1],
     ["account", "riskPct", "Risk %", "Balance lost if the initial stop is hit", 0.05, 10, 0.05],
@@ -212,7 +213,7 @@ function renderStrategy() {
     ["account", "fee", "Fee %", "Per side", 0, 1, 0.001],
   ];
   $("#exitFields").innerHTML = defs.map(([g, k, label, tip, min, max, st]) => {
-    const v = k === "fee" ? +(s.account.fee * 100).toFixed(4) : s[g][k];
+    const v = k === "fee" ? +(s.account.fee * 100).toFixed(4) : (s[g][k] ?? 0);
     return `<label title="${esc(tip)}">${label}<input type="number" data-${g === "exit" ? "exit" : "acc"}="${k}" min="${min}" max="${max}" step="${st}" value="${v}" inputmode="decimal"></label>`;
   }).join("");
 }
@@ -244,6 +245,8 @@ function condEl(side, i, cond) {
   const [lo, hi, st] = def.range;
   const val = $(".c-val", el), rng = $(".c-range", el);
   val.value = cond.value; rng.min = lo; rng.max = hi; rng.step = st; rng.value = cond.value;
+  const fill = () => rng.style.setProperty("--fill", `${((rng.value - lo) / (hi - lo || 1)) * 100}%`);
+  fill();
   const upd = (fn) => { fn(state.strategy[side][i]); persistCurrent(); };
   $(".c-ind", el).addEventListener("change", (e) => {
     const d = CATALOG_BY_ID[e.target.value];
@@ -254,8 +257,8 @@ function condEl(side, i, cond) {
     upd((c) => { c.params = { ...paramsWithDefaults(c.ind, c.params), [inp.dataset.p]: Number(inp.value) }; })));
   $(".c-tf", el).addEventListener("change", (e) => upd((c) => { if (e.target.value) c.tf = e.target.value; else delete c.tf; }));
   $(".c-op", el).addEventListener("change", (e) => upd((c) => { c.op = e.target.value; }));
-  val.addEventListener("change", () => { upd((c) => { c.value = Number(val.value); }); rng.value = val.value; });
-  rng.addEventListener("input", () => { val.value = rng.value; upd((c) => { c.value = Number(rng.value); }); });
+  val.addEventListener("change", () => { upd((c) => { c.value = Number(val.value); }); rng.value = val.value; fill(); });
+  rng.addEventListener("input", () => { val.value = rng.value; fill(); upd((c) => { c.value = Number(rng.value); }); });
   $(".c-del", el).addEventListener("click", () => { state.strategy[side].splice(i, 1); persistCurrent(); renderConds(); });
   return el;
 }
@@ -309,11 +312,60 @@ async function runBacktest() {
 function renderResult(r, ms) {
   $("#resBox").hidden = false;
   requestAnimationFrame(() => $("#resBox").scrollIntoView({ behavior: "smooth", block: "start" }));
-  const s = state.strategy;
-  $("#resMeta").textContent = `${s.name} · ${s.tradeTf} · ${fmtInt(r.candles)} bars · ${fmt(ms / 1000, 1)} s`;
-  const P = r.periods;
-  const row = (label, f) => `<tr><td>${label}</td>${P.map((p) => `<td>${f(p)}</td>`).join("")}</tr>`;
+  const s = state.strategy, P = r.periods, A = P[0];
+  $("#resMeta").textContent = `${s.name} · ${s.tradeTf}${r.detailTf ? ` · exits on ${r.detailTf}` : ""} · ${fmtInt(r.candles)} bars · ${fmt(ms / 1000, 1)} s`;
+  const ex = s.exit || {};
+  $("#resWarn").textContent = !r.detailTf && ex.trailStartR > 0 && ex.trailDistR < 0.3
+    ? `Trail gap ${ex.trailDistR}R on ${s.tradeTf} bars only is optimistic. Use smaller-TF data (e.g. 1m) for accurate exits.` : "";
   const my = (t) => { const d = new Date(t); return `${String(d.getUTCMonth() + 1).padStart(2, "0")}/${String(d.getUTCFullYear()).slice(2)}`; };
+
+  // tiêu đề: lãi/lỗ tổng + so với mua & giữ
+  $("#resReturn").innerHTML = `<span class="${cls(A.profitPct)}">${sign(A.profitPct)}%</span>`;
+  $("#resSub").innerHTML = `${fmt(A.cagrPct, 1)}%/yr · buy &amp; hold <span class="${cls(A.marketPct)}">${sign(A.marketPct)}%</span>`;
+  const good = A.profitFactor >= 1.15 && A.maxDDPct <= 25, bad = A.profitPct <= 0 || A.maxDDPct > 40;
+  $("#resBadges").innerHTML = `<span class="pill ${bad ? "bad" : good ? "good" : "mid"}">${bad ? "Weak" : good ? "Solid" : "OK"}</span>
+    ${r.detailTf ? `<span class="pill">${r.detailTf} exits</span>` : ""}`;
+  const kpi = (label, value, extra = "", c = "") => `<div class="kpi"><span>${label}</span><b class="${c}">${value}</b>${extra ? `<small>${extra}</small>` : ""}</div>`;
+  $("#resKpis").innerHTML = kpi("Max DD", `${fmt(A.maxDDPct, 1)}%`, "", A.maxDDPct > 30 ? "down" : "")
+    + kpi("Profit factor", fmt(A.profitFactor), "", A.profitFactor >= 1 ? "up" : "down")
+    + kpi("Win rate", `${fmt(A.winrate * 100, 0)}%`)
+    + kpi("Trades", fmtInt(A.trades), `${A.long}L · ${A.short}S`);
+
+  // đường vốn: vùng tô + đường, mốc chia giai đoạn
+  const eq = r.equity, W = 600, H = 180, pad = 8;
+  if (eq.length > 1) {
+    const xs = eq.map((e) => e[0]), ys = eq.map((e) => e[1]);
+    const x0 = xs[0], x1 = xs[xs.length - 1], lo = Math.min(...ys), hi = Math.max(...ys), span = hi - lo || 1;
+    const X = (t) => pad + ((t - x0) / (x1 - x0 || 1)) * (W - 2 * pad), Y = (v) => H - pad - ((v - lo) / span) * (H - 2 * pad);
+    const pts = eq.map((e) => `${X(e[0]).toFixed(1)},${Y(e[1]).toFixed(1)}`);
+    const split = P[1] ? X(P[2].from) : null;
+    const up = ys[ys.length - 1] >= ys[0], col = up ? "var(--up)" : "var(--down)";
+    $("#eqChart").innerHTML = `<defs><linearGradient id="eqFill" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="${col}" stop-opacity=".32"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></linearGradient></defs>
+      <line x1="0" x2="${W}" y1="${Y(ys[0])}" y2="${Y(ys[0])}" stroke="var(--line)" stroke-dasharray="4 5" vector-effect="non-scaling-stroke"/>
+      ${split ? `<line x1="${split}" x2="${split}" y1="0" y2="${H}" stroke="var(--muted)" stroke-opacity=".5" stroke-dasharray="3 5" vector-effect="non-scaling-stroke"/>` : ""}
+      <polygon points="${pts[0].split(",")[0]},${H} ${pts.join(" ")} ${pts[pts.length - 1].split(",")[0]},${H}" fill="url(#eqFill)"/>
+      <polyline points="${pts.join(" ")}" fill="none" stroke="${col}" stroke-width="2.2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`;
+    $("#eqAxis").innerHTML = `<span>${my(x0)} · ${fmtInt(ys[0])}</span>${split ? `<span>split ${my(P[2].from)}</span>` : ""}<span>${my(x1)} · <b class="${cls(ys[ys.length - 1] - ys[0])}">${fmtInt(ys[ys.length - 1])}</b></span>`;
+  } else { $("#eqChart").innerHTML = ""; $("#eqAxis").innerHTML = ""; }
+
+  // theo năm: thanh ngang
+  const maxAbs = Math.max(1, ...A.years.map((y) => Math.abs(y.pnl)));
+  $("#resYears").innerHTML = A.years.map((y) => `<div class="yr">
+      <span class="y">${y.year}</span>
+      <span class="bar"><i class="${y.pnl >= 0 ? "pos" : "neg"}" style="width:${(Math.abs(y.pnl) / maxAbs * 100).toFixed(1)}%"></i></span>
+      <b class="${cls(y.pnl)}">${sign(y.pnl, 0)}</b>
+      <small>${y.trades} · PF ${fmt(y.pf)}</small></div>`).join("") || `<p class="hint">No trades</p>`;
+
+  // lý do thoát: thanh tỉ lệ + chú thích
+  const names = { stop_loss: "Stop", trailing: "Trail", take_profit: "TP", time: "Time", end: "Open at end" };
+  const reasons = Object.entries(r.exitReasons), tot = reasons.reduce((a, [, v]) => a + v, 0) || 1;
+  $("#resExitBar").innerHTML = reasons.map(([k, v]) => `<i class="x-${k}" style="flex:${v}"></i>`).join("");
+  $("#resExits").innerHTML = reasons.map(([k, v]) => `<span class="chip"><i class="dot x-${k}"></i>${names[k] || k} ${v} · ${fmt(v / tot * 100, 0)}%</span>`).join("")
+    || `<span class="hint">No trades</span>`;
+
+  // bảng giai đoạn
+  const row = (label, f) => `<tr><td>${label}</td>${P.map((p) => `<td>${f(p)}</td>`).join("")}</tr>`;
   $("#resPeriods").innerHTML = `<thead><tr><th></th>${P.map((p) => `<th>${p.name}<br><small>${my(p.from)}–${my(p.to)}</small></th>`).join("")}</tr></thead><tbody>
     ${row("Return", (p) => `<b class="${cls(p.profitPct)}">${sign(p.profitPct)}%</b>`)}
     ${row("CAGR", (p) => `<span class="${cls(p.cagrPct)}">${sign(p.cagrPct)}%</span>`)}
@@ -322,26 +374,12 @@ function renderResult(r, ms) {
     ${row("Trades", (p) => `${p.trades} <small>${p.long}L/${p.short}S</small>`)}
     ${row("Win rate", (p) => `${fmt(p.winrate * 100, 1)}%`)}
     ${row("Buy &amp; hold", (p) => `<span class="${cls(p.marketPct)}">${sign(p.marketPct)}%</span>`)}</tbody>`;
-  // equity curve
-  const eq = r.equity, W = 600, H = 160, pad = 6;
-  if (eq.length > 1) {
-    const xs = eq.map((e) => e[0]), ys = eq.map((e) => e[1]);
-    const x0 = xs[0], x1 = xs[xs.length - 1], lo = Math.min(...ys), hi = Math.max(...ys), span = hi - lo || 1;
-    const X = (t) => pad + ((t - x0) / (x1 - x0 || 1)) * (W - 2 * pad), Y = (v) => H - pad - ((v - lo) / span) * (H - 2 * pad);
-    const pts = eq.map((e) => `${X(e[0]).toFixed(1)},${Y(e[1]).toFixed(1)}`).join(" ");
-    const split = P[1] ? X(P[2].from) : null;
-    const col = ys[ys.length - 1] >= ys[0] ? "var(--up)" : "var(--down)";
-    $("#eqChart").innerHTML = `<line x1="0" x2="${W}" y1="${Y(ys[0])}" y2="${Y(ys[0])}" stroke="var(--line)" stroke-dasharray="4 4"/>
-      ${split ? `<line x1="${split}" x2="${split}" y1="0" y2="${H}" stroke="var(--muted)" stroke-dasharray="3 5"/>` : ""}
-      <polyline points="${pts}" fill="none" stroke="${col}" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
-  } else $("#eqChart").innerHTML = "";
-  $("#resYears").innerHTML = `<thead><tr><th>Year</th><th>Trades</th><th>PnL</th><th>PF</th></tr></thead><tbody>${P[0].years
-    .map((y) => `<tr><td>${y.year}</td><td>${y.trades}</td><td class="${cls(y.pnl)}">${sign(y.pnl, 0)}</td><td>${fmt(y.pf)}</td></tr>`).join("")}</tbody>`;
-  const names = { stop_loss: "stop", trailing: "trail", time: "time", end: "end" };
-  $("#resExits").innerHTML = Object.entries(r.exitReasons).map(([k, v]) => `<span class="chip">${names[k] || k} ${v}</span>`).join("") || `<span class="hint">No trades</span>`;
-  $("#resTrades").innerHTML = `<thead><tr><th>Exit time</th><th>Side</th><th>Entry</th><th>Exit</th><th>PnL</th><th>Why</th></tr></thead><tbody>${r.trades.slice(0, 100)
-    .map((x) => `<tr><td>${new Date(x.exitT).toISOString().slice(0, 16).replace("T", " ")}</td><td class="${x.dir === 1 ? "up" : "down"}">${x.dir === 1 ? "Long" : "Short"}</td>
-      <td>${fmt(x.entry, 1)}</td><td>${fmt(x.exit, 1)}</td><td class="${cls(x.pnl)}">${sign(x.pnl, 2)}</td><td>${names[x.reason] || x.reason}</td></tr>`).join("")}</tbody>`;
+
+  // lệnh gần nhất
+  $("#resTrades").innerHTML = r.trades.slice(0, 100).map((x) => `<div class="tr">
+      <span class="side ${x.dir === 1 ? "long" : "short"}">${x.dir === 1 ? "L" : "S"}</span>
+      <span class="tmain"><b>${fmt(x.entry, 1)} → ${fmt(x.exit, 1)}</b><small>${new Date(x.exitT).toISOString().slice(0, 16).replace("T", " ")} · ${names[x.reason] || x.reason}</small></span>
+      <b class="${cls(x.pnl)}">${sign(x.pnl, 2)}</b></div>`).join("");
 }
 
 // ============================================================== init

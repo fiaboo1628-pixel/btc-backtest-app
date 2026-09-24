@@ -14,12 +14,15 @@ self.onmessage = (e) => {
     if (errs.length) throw new Error(errs.join("\n"));
 
     const base = strategy.tradeTf === sourceTf ? source : resample(source, strategy.tradeTf);
+    // dữ liệu nhỏ hơn khung giao dịch → quản lý lệnh trên từng nến nhỏ (chính xác hơn, như --timeframe-detail)
+    const detail = strategy.tradeTf !== sourceTf && strategy.exit?.intrabar !== false;
     const sig = buildSignals(strategy, base, source);
     const a = atr(base.h, base.l, base.c, 14);
     const idx = (t) => { let i = 0; while (i < base.t.length && base.t[i] < t) i++; return i; };
     const s0 = Math.max(1, idx(from ?? base.t[0])), s1 = to ? idx(to) : base.t.length;
     const run = (start, end) => {
-      const res = backtest(base, sig, a, { exit: strategy.exit, account: strategy.account, funding, startIdx: start, endIdx: end });
+      const res = backtest(base, sig, a, { exit: strategy.exit, account: strategy.account, funding, startIdx: start, endIdx: end,
+        ...(detail ? { detail: source, detailMs: TF_MS[strategy.tradeTf] } : {}) });
       const st = stats(res, strategy.account?.wallet ?? 1000, base.t[start], base.t[Math.max(start, end - 1)]);
       st.from = base.t[start]; st.to = base.t[Math.max(start, end - 1)];
       st.marketPct = (base.c[Math.max(start, end - 1)] / base.o[start] - 1) * 100;
@@ -41,7 +44,7 @@ self.onmessage = (e) => {
     const signals = { long: 0, short: 0 };
     for (let i = s0; i < s1; i++) { if (sig[i] === 1) signals.long++; else if (sig[i] === -1) signals.short++; }
     self.postMessage({
-      id, ok: true, periods, equity, signals, candles: s1 - s0,
+      id, ok: true, periods, equity, signals, candles: s1 - s0, detailTf: detail ? sourceTf : null,
       trades: tr.slice(-300).reverse(),
       exitReasons: tr.reduce((m, x) => ((m[x.reason] = (m[x.reason] || 0) + 1), m), {}),
     });
