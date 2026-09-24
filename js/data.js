@@ -94,9 +94,41 @@ export async function deleteDataset(id) {
 // ---------------------------------------------------------------- Binance
 const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
 
-async function getJson(url, signal) {
-  for (let attempt = 0; ; attempt++) {
-    const r = await fetch(url, { signal });
+const isHidden = () => typeof document !== "undefined" && document.hidden;
+const abortErr = (signal) => signal.reason ?? new DOMException("Aborted", "AbortError");
+
+/** Chờ tới khi app hiện lại trên màn hình (iOS dừng mạng khi app chạy nền). */
+function whenVisible(signal) {
+  return new Promise((ok, fail) => {
+    if (!isHidden()) return ok();
+    const done = () => { document.removeEventListener("visibilitychange", on); signal?.removeEventListener("abort", stop); };
+    const on = () => { if (!document.hidden) { done(); ok(); } };
+    const stop = () => { done(); fail(abortErr(signal)); };
+    document.addEventListener("visibilitychange", on);
+    signal?.addEventListener("abort", stop, { once: true });
+  });
+}
+
+/**
+ * GET JSON; thử lại khi bị giới hạn tốc độ/lỗi máy chủ.
+ * resume: lỗi mạng (iOS cắt kết nối khi chuyển app, mạng chập chờn) thì chờ app hiện lại rồi thử tiếp,
+ * thay vì bỏ cả lần tải. Không dùng khi dò đường gọi (resolveBase) để còn chuyển sang proxy nhanh.
+ */
+async function getJson(url, signal, { resume = false, onPause } = {}) {
+  for (let attempt = 0, netFails = 0; ; attempt++) {
+    let r;
+    try {
+      r = await fetch(url, { signal });
+    } catch (e) {
+      if (!resume || e.name === "AbortError" || !(e instanceof TypeError)) throw e;
+      if (isHidden()) {
+        onPause?.(true); await whenVisible(signal); onPause?.(false);
+      } else {
+        if (++netFails > 5) throw e;
+        await sleep(1000 * netFails);
+      }
+      continue;
+    }
     if (r.ok) return r.json();
     if ((r.status === 429 || r.status === 418 || r.status >= 500) && attempt < 5) {
       await sleep(Number(r.headers.get("Retry-After") || 0) * 1000 || 2000 * (attempt + 1));
@@ -147,26 +179,54 @@ export async function testConnection(market, apiBase) {
   return { ok: Array.isArray(rows) && rows.length > 0, ms: Math.round(performance.now() - t0), via };
 }
 
+const CHECKPOINT = 50; // lưu tạm sau mỗi ~50 yêu cầu (50k nến): app bị iOS đóng hẳn thì lần sau tải tiếp
+
+/** Ghép nến mới (cols) vào bộ đã có; cols bắt đầu sau nến cuối thì nối, còn lại thay hẳn. */
+function mergeCandles(prev, cols) {
+  if (prev && !cols.t.length) return prev.candles;
+  if (prev && cols.t[0] > prev.meta.last) {
+    return Object.fromEntries(COLS.map((k) => {
+      const a = new Float64Array(prev.candles[k].length + cols[k].length);
+      a.set(prev.candles[k]); a.set(cols[k], prev.candles[k].length);
+      return [k, a];
+    }));
+  }
+  return Object.fromEntries(COLS.map((k) => [k, Float64Array.from(cols[k])]));
+}
+
 /**
  * Tải (hoặc cập nhật) nến. Nếu đã có dữ liệu cùng id thì chỉ tải phần mới sau nến cuối.
- * onProgress({done, total, phase})
+ * Lưu tạm định kỳ, nên bị ngắt giữa chừng thì bấm Download lại sẽ tải tiếp từ chỗ dừng.
+ * onProgress({done, total, phase}); phase "paused" khi đang chờ mở lại app.
  */
 export async function download({ market, symbol, tf, from, apiBase, onProgress, signal }) {
   const m = MARKETS[market];
   const { base } = await resolveBase(market, apiBase, signal);
   const id = datasetId(market, symbol, tf);
-  const existing = await loadDataset(id);
+  let saved = await loadDataset(id);
   const ms = TF_MS[tf];
   const now = Date.now();
   const lastClosed = Math.floor(now / ms) * ms - ms;
-  let start = existing ? existing.meta.last + ms : Math.floor(from / ms) * ms;
-  if (existing && from < existing.meta.first) start = Math.floor(from / ms) * ms; // extending into the past → reload
-  const cols = Object.fromEntries(COLS.map((k) => [k, []]));
+  let start = saved ? saved.meta.last + ms : Math.floor(from / ms) * ms;
+  if (saved && from < saved.meta.first) start = Math.floor(from / ms) * ms; // extending into the past → reload
+  const meta = { id, market, symbol: symbol.toUpperCase(), tf };
+  let cols = Object.fromEntries(COLS.map((k) => [k, []]));
+  let added = 0;
+  const flush = async () => {
+    const candles = mergeCandles(saved, cols);
+    const funding = saved?.funding || [];
+    await saveDataset({ ...meta, funding, chunks: saved?.meta.chunks }, candles);
+    const n = candles.t.length;
+    saved = { meta: { ...meta, chunks: Math.ceil(n / CHUNK), first: candles.t[0], last: candles.t[n - 1] }, candles, funding };
+    added += cols.t.length;
+    cols = Object.fromEntries(COLS.map((k) => [k, []]));
+  };
   const total = Math.max(1, Math.ceil((lastClosed - start) / ms / m.limit));
   let done = 0;
+  const onPause = (p) => onProgress?.({ done, total, phase: p ? "paused" : "candles" });
   while (start <= lastClosed) {
     const url = `${base}${m.klines}?symbol=${symbol}&interval=${tf}&startTime=${start}&limit=${m.limit}`;
-    const rows = await getJson(url, signal);
+    const rows = await getJson(url, signal, { resume: true, onPause });
     if (!rows.length) break;
     for (const r of rows) {
       if (r[0] > lastClosed) break;                      // bỏ nến chưa đóng
@@ -175,20 +235,16 @@ export async function download({ market, symbol, tf, from, apiBase, onProgress, 
     }
     start = rows[rows.length - 1][0] + ms;
     onProgress?.({ done: ++done, total, phase: "candles" });
+    if (done % CHECKPOINT === 0 && cols.t.length) await flush();
     await sleep(120);                                     // ~8 yêu cầu/giây, dưới giới hạn Binance
   }
-  let candles;
-  if (existing && cols.t.length && cols.t[0] > existing.meta.last) {
-    candles = Object.fromEntries(COLS.map((k) => [k, Float64Array.from([...existing.candles[k], ...cols[k]])]));
-  } else if (existing && !cols.t.length) {
-    candles = existing.candles;
-  } else {
-    candles = Object.fromEntries(COLS.map((k) => [k, Float64Array.from(cols[k])]));
+  if (cols.t.length || !saved) await flush();
+  const { candles } = saved;
+  if (m.funding && candles.t.length) {
+    const funding = await downloadFunding(m, base, symbol, candles, saved.funding, onProgress, signal);
+    await saveDataset({ ...meta, funding, chunks: saved.meta.chunks }, candles);
   }
-  let funding = existing?.funding || [];
-  if (m.funding && candles.t.length) funding = await downloadFunding(m, base, symbol, candles, funding, onProgress, signal);
-  await saveDataset({ id, market, symbol: symbol.toUpperCase(), tf, funding, chunks: existing?.meta.chunks }, candles);
-  return { id, added: cols.t.length, count: candles.t.length };
+  return { id, added, count: candles.t.length };
 }
 
 async function downloadFunding(m, base, symbol, candles, have, onProgress, signal) {
@@ -202,7 +258,8 @@ async function downloadFunding(m, base, symbol, candles, have, onProgress, signa
   };
   let n = 0;
   while (start <= end) {
-    const rows = await getJson(`${base}${m.funding}?symbol=${symbol}&startTime=${start}&limit=1000`, signal);
+    const rows = await getJson(`${base}${m.funding}?symbol=${symbol}&startTime=${start}&limit=1000`, signal,
+      { resume: true, onPause: (p) => onProgress?.({ done: n, total: n + 1, phase: p ? "paused" : "funding" }) });
     if (!rows.length) break;
     for (const r of rows) {
       if (r.fundingTime > end) break;

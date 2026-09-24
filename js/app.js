@@ -136,13 +136,18 @@ async function startDownload(opts) {
   state.abort = ctl;
   $("#btnDownload").disabled = true; $("#btnCancel").hidden = false;
   const prog = $("#dlProg"); prog.classList.remove("hidden");
+  // giữ màn hình sáng khi đang tải: màn hình tắt thì iOS dừng mạng của app
+  const lock = { s: null, want: true };
+  const takeLock = () => { if (lock.want && !document.hidden) navigator.wakeLock?.request("screen").then((w) => { lock.s = w; }, () => {}); };
+  const relock = () => { if (!lock.s || lock.s.released) takeLock(); };
+  takeLock(); document.addEventListener("visibilitychange", relock);
   try {
     if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
     const r = await Data.download({
       ...opts, apiBase: $("#apiBase").value.trim() || undefined, signal: ctl.signal,
       onProgress: ({ done, total, phase }) => {
         prog.firstElementChild.style.width = `${Math.min(100, (done / total) * 100)}%`;
-        $("#dlStatus").textContent = `${phase} ${done}/${total}`;
+        $("#dlStatus").textContent = phase === "paused" ? `Paused in background · ${done}/${total}` : `${phase} ${done}/${total}`;
       },
     });
     $("#dlStatus").textContent = "";
@@ -150,8 +155,11 @@ async function startDownload(opts) {
     await useDataset(r.id);
   } catch (e) {
     $("#dlStatus").textContent = "";
-    toast(e.name === "AbortError" ? "Stopped." : `Download failed: ${e.message}`, "err");
+    toast(e.name === "AbortError" ? "Stopped. Download again to resume."
+      : `Download failed: ${e.message}. Progress is saved — tap Download to resume.`, "err");
+    await refreshDatasets().catch(() => {});
   } finally {
+    lock.want = false; document.removeEventListener("visibilitychange", relock); lock.s?.release().catch(() => {});
     prog.classList.add("hidden"); $("#btnDownload").disabled = false; $("#btnCancel").hidden = true; state.abort = null;
   }
 }
