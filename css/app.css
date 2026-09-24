@@ -198,3 +198,29 @@ body.kb .tabbar { transform: translateY(110%); }
   .tabbar, .tabbar button { transition: none; }
 }
 @media (max-width: 380px) { .grid3 { grid-template-columns: 1fr 1fr; } }
+
+/* ===== replay ===== */
+.btn.wide { width: 100%; margin: 4px 0 10px; }
+body.replaying { overflow: hidden; }
+body.replaying .tabbar { transform: translateY(110%); }
+.replay { position: fixed; inset: 0; z-index: 20; background: var(--bg); display: flex; flex-direction: column;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+.replay[hidden] { display: none; }
+.rp-top { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--line); }
+.rp-hud { flex: 1; display: grid; grid-template-columns: 1fr 1.4fr .8fr; gap: 6px; }
+.rp-hud div { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 5px 9px; display: grid; min-width: 0; }
+.rp-hud span { font-size: 10.5px; color: var(--muted); }
+.rp-hud b { font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rp-chart { flex: 1; min-height: 0; margin: 8px 10px 0; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); }
+.rp-bottom { padding: 8px 14px 10px; }
+.rp-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.rp-time { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.rp-speed { margin-left: auto; }
+.rp-speed button[aria-pressed=true] { background: var(--accent); color: var(--accent-ink); }
+#rpScrub { width: 100%; margin: 6px 0 2px; --fill: 0%; }
+.rp-ctrl { display: grid; grid-template-columns: 1fr 1fr 1.3fr 1fr 1fr; gap: 8px; align-items: center; }
+.rp-ctrl button { font: inherit; font-size: 18px; min-height: 48px; border-radius: 14px; border: 1px solid var(--line);
+  background: var(--panel-2); color: var(--text); cursor: pointer; }
+.rp-ctrl button:active { transform: scale(.96); }
+.rp-ctrl .rp-play { background: var(--grad); color: #fff; border: 0; font-size: 20px;
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 35%, transparent); }

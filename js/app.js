@@ -1,7 +1,7 @@
 import * as Data from "./data.js";
 import { CATALOG, CATALOG_BY_ID, paramsWithDefaults } from "./catalog.js";
 import { OPS } from "./rules.js";
-import { TF_MS, TF_LIST } from "./timeframes.js";
+import { TF_MS, TF_LIST, resample } from "./timeframes.js";
 import { DEFAULT_EXIT, DEFAULT_ACCOUNT } from "./engine.js";
 
 // Initialize Vercel Web Analytics
@@ -306,6 +306,7 @@ async function runBacktest() {
   btn.disabled = false; label.textContent = "Run";
   if (!res.ok) { toast(res.error, "err"); return; }
   toast("");
+  state.lastRun = { replay: res.replay, range: res.range, tf: s.tradeTf, wallet: s.account?.wallet ?? 1000 };
   renderResult(res, performance.now() - t0);
 }
 
@@ -382,10 +383,26 @@ function renderResult(r, ms) {
       <b class="${cls(x.pnl)}">${sign(x.pnl, 2)}</b></div>`).join("");
 }
 
+async function openReplayView() {
+  const run = state.lastRun, ds = state.dataset;
+  if (!run || !ds) return;
+  if (!run.replay.length) { toast("No trades to replay.", "warn"); return; }
+  const src = ds.candles;
+  const base = run.tf === ds.meta.tf ? src : resample(src, run.tf);
+  // chỉ giữ khoảng thời gian đã backtest
+  let a = 0; while (a < base.t.length && base.t[a] < run.range[0]) a++;
+  let b = base.t.length; while (b > a && base.t[b - 1] > run.range[1]) b--;
+  const cut = (k) => Array.prototype.slice.call(base[k], a, b);
+  const bars = { t: cut("t"), o: cut("o"), h: cut("h"), l: cut("l"), c: cut("c") };
+  const R = await import("./replay.js");
+  R.openReplay({ bars, trades: run.replay, wallet: run.wallet, tfMs: TF_MS[run.tf], fmt, sign });
+}
+
 // ============================================================== init
 async function init() {
   document.querySelectorAll(".tabbar [data-tab]").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
   $("#btnRun").addEventListener("click", runBacktest);
+  $("#btnReplay").addEventListener("click", openReplayView);
   enableSwipe();
   hideTabbarWithKeyboard();
 
