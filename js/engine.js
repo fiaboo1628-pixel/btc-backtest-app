@@ -2,6 +2,9 @@
 //  - tín hiệu tính khi nến i đóng cửa → vào lệnh ở giá mở cửa nến i+1
 //  - mỗi nến: cập nhật đỉnh/đáy → dời stop (trailing) theo đỉnh/đáy → kiểm tra low/high chạm stop
 //  - stop dính khoảng trống giá (gap) → thoát ở giá mở cửa
+//  - opts.detail (nến khung nhỏ hơn, vd 1m): quản lý lệnh chạy trên từng nến nhỏ bên trong nến giao dịch,
+//    như --timeframe-detail của freqtrade — biết high hay low đến trước, không "bán đúng đỉnh nến"
+//  - TP cố định theo R (tpR > 0); stop chạm trước TP nếu cùng một nến
 //  - làm tròn giá stop theo bước giá (Long làm tròn lên, Short làm tròn xuống), khối lượng cắt xuống
 //  - phí trên giá trị lệnh ở cả hai chiều, funding cộng dồn từ lúc vào tới nến thoát
 //  - khối lượng theo rủi ro: mất `riskPct`% vốn nếu dính stop ban đầu (đòn bẩy tự tính, có trần)
@@ -12,9 +15,10 @@ const floorStep = (x, step) => Math.floor(x / step + 1e-9) * step;
 
 export const DEFAULT_EXIT = {
   rAtr: 3,             // 1R = rAtr × ATR của nến tín hiệu
-  trailStartR: 2,      // lãi chạm ngần này R thì bật trailing
+  trailStartR: 2,      // lãi chạm ngần này R thì bật trailing (0 = tắt trailing)
   trailDistR: 0.5,     // trailing cách đỉnh/đáy ngần này R
   maxHoldBars: 0,      // 0 = không giới hạn thời gian giữ lệnh
+  tpR: 0,              // chốt lời cố định ở ngần này R (0 = tắt)
 };
 
 export const DEFAULT_ACCOUNT = {
@@ -31,7 +35,8 @@ export const DEFAULT_ACCOUNT = {
  * @param {object} c       nến khung giao dịch: {t, o, h, l, c} (mảng, t = mili-giây giờ mở nến)
  * @param {Int8Array} sig  tín hiệu tại nến đóng: 1 = Long, -1 = Short, 0 = không
  * @param {Float64Array} atr ATR khung giao dịch (dùng tính R)
- * @param {object} opts    {exit, account, funding: [{t, rate, mark}], startIdx, endIdx}
+ * @param {object} opts    {exit, account, funding: [{t, rate, mark}], startIdx, endIdx,
+ *                          detail: nến khung nhỏ {t,o,h,l,c} để quản lý lệnh bên trong nến, detailMs: độ dài nến giao dịch}
  */
 export function backtest(c, sig, atr, opts = {}) {
   const ex = { ...DEFAULT_EXIT, ...opts.exit };
@@ -43,6 +48,25 @@ export function backtest(c, sig, atr, opts = {}) {
   let closedPnl = 0;
   let pos = null;
   let fundIdx = 0;
+  // chỉ số nến nhỏ đầu tiên của từng nến giao dịch (detail)
+  const D = opts.detail || null;
+  let dStart = null;
+  if (D) {
+    const ms = opts.detailMs;
+    dStart = new Int32Array(c.t.length + 1);
+    let j = 0;
+    for (let i = 0; i < c.t.length; i++) {
+      while (j < D.t.length && D.t[j] < c.t[i]) j++;
+      dStart[i] = j;
+    }
+    dStart[c.t.length] = D.t.length;
+    // nến giao dịch cuối có thể chưa đủ nến nhỏ: chặn theo độ dài nến
+    for (let i = 0; i < c.t.length; i++) {
+      let e = dStart[i + 1];
+      while (e > dStart[i] && D.t[e - 1] >= c.t[i] + ms) e--;
+      if (e < dStart[i + 1]) dStart[i + 1] = Math.max(e, dStart[i]);
+    }
+  }
 
   const fundingBetween = (t0, t1, amount, dir) => {
     // tổng funding trong [t0, t1]; Long trả khi rate > 0, Short nhận
@@ -100,7 +124,25 @@ export function backtest(c, sig, atr, opts = {}) {
     }
     if (!pos) return 0;
 
-    // 2) cập nhật đỉnh/đáy và dời stop (chỉ khi stop chưa bị chạm trong nến này)
+    // 2–3) quản lý lệnh: trên từng nến nhỏ (detail) hoặc trên chính nến giao dịch
+    const d = pos.dir;
+    if (D && dStart[i + 1] > dStart[i]) {
+      for (let j = dStart[i]; j < dStart[i + 1]; j++) {
+        const out = manage(D.o[j], D.h[j], D.l[j], enteredNow && j === dStart[i]);
+        if (out) { close(i, out[0], out[1]); return d; }
+      }
+    } else {
+      const out = manage(o, h, l, enteredNow);
+      if (out) { close(i, out[0], out[1]); return d; }
+    }
+
+    // 4) giới hạn thời gian giữ lệnh (thoát ở giá đóng cửa)
+    if (ex.maxHoldBars > 0 && i - pos.i0 + 1 >= ex.maxHoldBars) { close(i, c.c[i], "time"); return d; }
+    return 0;
+  }
+
+  /** Một nến (hoặc nến nhỏ): dời stop theo đỉnh/đáy, kiểm tra stop rồi TP. Trả [giá thoát, lý do] hoặc null. */
+  function manage(o, h, l, first) {
     const d = pos.dir;
     const bound = d === 1 ? h : l;
     pos.peak = d === 1 ? Math.max(pos.peak, h) : Math.min(pos.peak, l);
@@ -108,31 +150,29 @@ export function backtest(c, sig, atr, opts = {}) {
     if (stopSafe) {
       let want = pos.entry - d * pos.r;
       const moved = d * (pos.peak - pos.entry);
-      if (moved >= ex.trailStartR * pos.r) {
+      if (ex.trailStartR > 0 && moved >= ex.trailStartR * pos.r) {
         const trail = pos.peak - d * ex.trailDistR * pos.r;
         want = d === 1 ? Math.max(want, trail) : Math.min(want, trail);
       }
       want = d === 1 ? ceilStep(want, acc.priceStep) : floorStep(want, acc.priceStep);
       if (d * (want - pos.stop) > 0) { pos.stop = want; pos.stopRef = bound; }
     }
-
-    // 3) stop bị chạm?
     const hit = d === 1 ? pos.stop >= l : pos.stop <= h;
     if (hit) {
       let px;
       if (d === 1 ? pos.stop > h : pos.stop < l) px = o;             // khoảng trống giá
-      else if (enteredNow) {                                          // chạm ngay trong nến vào lệnh
+      else if (first) {                                               // chạm ngay trong nến vào lệnh
         const rate = o * (pos.stop / pos.stopRef);
         px = d === 1 ? Math.max(l, rate) : Math.min(h, rate);
       } else px = pos.stop;
       const initial = d === 1 ? ceilStep(pos.entry - pos.r, acc.priceStep) : floorStep(pos.entry + pos.r, acc.priceStep);
-      close(i, px, pos.stop === initial ? "stop_loss" : "trailing");
-      return d;
+      return [px, pos.stop === initial ? "stop_loss" : "trailing"];
     }
-
-    // 4) giới hạn thời gian giữ lệnh (thoát ở giá đóng cửa)
-    if (ex.maxHoldBars > 0 && i - pos.i0 + 1 >= ex.maxHoldBars) { close(i, c.c[i], "time"); return d; }
-    return 0;
+    if (ex.tpR > 0) {
+      const tp = pos.entry + d * ex.tpR * pos.r;
+      if (d === 1 ? h >= tp : l <= tp) return [d === 1 ? Math.max(o, tp) : Math.min(o, tp), "take_profit"];
+    }
+    return null;
   }
 }
 

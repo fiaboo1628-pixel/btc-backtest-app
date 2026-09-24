@@ -1,4 +1,3 @@
-import { inject } from "@vercel/analytics";
 import * as Data from "./data.js";
 import { CATALOG, CATALOG_BY_ID, paramsWithDefaults } from "./catalog.js";
 import { OPS } from "./rules.js";
@@ -6,7 +5,8 @@ import { TF_MS, TF_LIST } from "./timeframes.js";
 import { DEFAULT_EXIT, DEFAULT_ACCOUNT } from "./engine.js";
 
 // Initialize Vercel Web Analytics
-inject();
+// thống kê truy cập (Vercel Analytics): tải không bắt buộc — lỗi/offline thì bỏ qua, app vẫn chạy
+import("@vercel/analytics").then((m) => m.inject()).catch(() => {});
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -203,8 +203,9 @@ function renderStrategy() {
   // [group, key, label, tooltip, min, max, step]
   const defs = [
     ["exit", "rAtr", "Stop (×ATR)", "1R = initial stop distance = this × ATR(14)", 0.5, 10, 0.1],
-    ["exit", "trailStartR", "Trail at (R)", "Start trailing once profit reaches this many R", 0.5, 10, 0.1],
+    ["exit", "trailStartR", "Trail at (R)", "Start trailing once profit reaches this many R (0 = no trailing)", 0, 10, 0.1],
     ["exit", "trailDistR", "Trail gap (R)", "Trailing stop distance from the high/low, in R", 0.1, 5, 0.1],
+    ["exit", "tpR", "Take profit (R)", "Fixed take-profit at this many R (0 = off)", 0, 20, 0.1],
     ["exit", "maxHoldBars", "Max bars", "Close after this many bars (0 = off)", 0, 5000, 1],
     ["account", "wallet", "Capital", "Starting balance (USDT)", 10, 1e9, 1],
     ["account", "riskPct", "Risk %", "Balance lost if the initial stop is hit", 0.05, 10, 0.05],
@@ -212,7 +213,7 @@ function renderStrategy() {
     ["account", "fee", "Fee %", "Per side", 0, 1, 0.001],
   ];
   $("#exitFields").innerHTML = defs.map(([g, k, label, tip, min, max, st]) => {
-    const v = k === "fee" ? +(s.account.fee * 100).toFixed(4) : s[g][k];
+    const v = k === "fee" ? +(s.account.fee * 100).toFixed(4) : (s[g][k] ?? 0);
     return `<label title="${esc(tip)}">${label}<input type="number" data-${g === "exit" ? "exit" : "acc"}="${k}" min="${min}" max="${max}" step="${st}" value="${v}" inputmode="decimal"></label>`;
   }).join("");
 }
@@ -310,7 +311,10 @@ function renderResult(r, ms) {
   $("#resBox").hidden = false;
   requestAnimationFrame(() => $("#resBox").scrollIntoView({ behavior: "smooth", block: "start" }));
   const s = state.strategy;
-  $("#resMeta").textContent = `${s.name} · ${s.tradeTf} · ${fmtInt(r.candles)} bars · ${fmt(ms / 1000, 1)} s`;
+  $("#resMeta").textContent = `${s.name} · ${s.tradeTf}${r.detailTf ? ` · exits on ${r.detailTf}` : ""} · ${fmtInt(r.candles)} bars · ${fmt(ms / 1000, 1)} s`;
+  const ex = s.exit || {};
+  $("#resWarn").textContent = !r.detailTf && ex.trailStartR > 0 && ex.trailDistR < 0.3
+    ? `Trail gap ${ex.trailDistR}R on ${s.tradeTf} bars only is optimistic. Use smaller-TF data (e.g. 1m) for accurate exits.` : "";
   const P = r.periods;
   const row = (label, f) => `<tr><td>${label}</td>${P.map((p) => `<td>${f(p)}</td>`).join("")}</tr>`;
   const my = (t) => { const d = new Date(t); return `${String(d.getUTCMonth() + 1).padStart(2, "0")}/${String(d.getUTCFullYear()).slice(2)}`; };
@@ -337,7 +341,7 @@ function renderResult(r, ms) {
   } else $("#eqChart").innerHTML = "";
   $("#resYears").innerHTML = `<thead><tr><th>Year</th><th>Trades</th><th>PnL</th><th>PF</th></tr></thead><tbody>${P[0].years
     .map((y) => `<tr><td>${y.year}</td><td>${y.trades}</td><td class="${cls(y.pnl)}">${sign(y.pnl, 0)}</td><td>${fmt(y.pf)}</td></tr>`).join("")}</tbody>`;
-  const names = { stop_loss: "stop", trailing: "trail", time: "time", end: "end" };
+  const names = { stop_loss: "stop", trailing: "trail", take_profit: "TP", time: "time", end: "end" };
   $("#resExits").innerHTML = Object.entries(r.exitReasons).map(([k, v]) => `<span class="chip">${names[k] || k} ${v}</span>`).join("") || `<span class="hint">No trades</span>`;
   $("#resTrades").innerHTML = `<thead><tr><th>Exit time</th><th>Side</th><th>Entry</th><th>Exit</th><th>PnL</th><th>Why</th></tr></thead><tbody>${r.trades.slice(0, 100)
     .map((x) => `<tr><td>${new Date(x.exitT).toISOString().slice(0, 16).replace("T", " ")}</td><td class="${x.dir === 1 ? "up" : "down"}">${x.dir === 1 ? "Long" : "Short"}</td>
