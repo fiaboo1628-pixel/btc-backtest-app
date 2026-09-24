@@ -1,21 +1,101 @@
 {
-  "name": "Ví dụ nhiều khung: Donchian 15m + lọc ADX 1h",
-  "description": "Minh hoạ điều kiện ở khung lớn: chỉ đánh hồi khi ADX của nến 1h đã đóng > 25.",
+  "name": "Donchian 15m + 1h ADX",
+  "description": "Multi-timeframe example: only trade when the closed 1h ADX > 25.",
   "tradeTf": "15m",
   "long": [
-    {"ind": "dpos", "params": {"n": 20}, "op": "<=", "value": 0.074},
-    {"ind": "adx", "params": {"n": 14}, "op": ">", "value": 30},
-    {"ind": "adx", "params": {"n": 14}, "tf": "1h", "op": ">", "value": 25},
-    {"ind": "vol_ratio", "params": {"n": 96}, "op": "<", "value": 1.0},
-    {"ind": "atr_pct", "params": {"n": 14}, "op": ">=", "value": 0.4}
+    {
+      "ind": "dpos",
+      "params": {
+        "n": 20
+      },
+      "op": "<=",
+      "value": 0.074
+    },
+    {
+      "ind": "adx",
+      "params": {
+        "n": 14
+      },
+      "op": ">",
+      "value": 30
+    },
+    {
+      "ind": "adx",
+      "params": {
+        "n": 14
+      },
+      "tf": "1h",
+      "op": ">",
+      "value": 25
+    },
+    {
+      "ind": "vol_ratio",
+      "params": {
+        "n": 96
+      },
+      "op": "<",
+      "value": 1.0
+    },
+    {
+      "ind": "atr_pct",
+      "params": {
+        "n": 14
+      },
+      "op": ">=",
+      "value": 0.4
+    }
   ],
   "short": [
-    {"ind": "dpos", "params": {"n": 20}, "op": ">=", "value": 0.944},
-    {"ind": "adx", "params": {"n": 14}, "op": ">", "value": 30},
-    {"ind": "adx", "params": {"n": 14}, "tf": "1h", "op": ">", "value": 25},
-    {"ind": "vol_ratio", "params": {"n": 96}, "op": "<", "value": 1.0},
-    {"ind": "atr_pct", "params": {"n": 14}, "op": ">=", "value": 0.4}
+    {
+      "ind": "dpos",
+      "params": {
+        "n": 20
+      },
+      "op": ">=",
+      "value": 0.944
+    },
+    {
+      "ind": "adx",
+      "params": {
+        "n": 14
+      },
+      "op": ">",
+      "value": 30
+    },
+    {
+      "ind": "adx",
+      "params": {
+        "n": 14
+      },
+      "tf": "1h",
+      "op": ">",
+      "value": 25
+    },
+    {
+      "ind": "vol_ratio",
+      "params": {
+        "n": 96
+      },
+      "op": "<",
+      "value": 1.0
+    },
+    {
+      "ind": "atr_pct",
+      "params": {
+        "n": 14
+      },
+      "op": ">=",
+      "value": 0.4
+    }
   ],
-  "exit": {"rAtr": 3, "trailStartR": 2, "trailDistR": 0.5, "maxHoldBars": 0},
-  "account": {"riskPct": 1, "maxLev": 5}
+  "exit": {
+    "rAtr": 3,
+    "trailStartR": 2,
+    "trailDistR": 0.5,
+    "maxHoldBars": 0
+  },
+  "account": {
+    "riskPct": 1,
+    "maxLev": 5
+  }
 }

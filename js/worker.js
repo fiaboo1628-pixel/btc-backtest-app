@@ -8,9 +8,9 @@ self.onmessage = (e) => {
   const { id, source, sourceTf, funding, strategy, split, from, to } = e.data;
   try {
     const errs = validateStrategy(strategy);
-    if (TF_MS[strategy.tradeTf] < TF_MS[sourceTf]) errs.push("Khung giao dịch nhỏ hơn khung dữ liệu đã tải.");
+    if (TF_MS[strategy.tradeTf] < TF_MS[sourceTf]) errs.push("Trade TF is smaller than the data TF.");
     for (const side of ["long", "short"]) for (const c of strategy[side] || [])
-      if (TF_MS[c.tf || strategy.tradeTf] < TF_MS[sourceTf]) errs.push("Có điều kiện dùng khung nhỏ hơn dữ liệu đã tải.");
+      if (TF_MS[c.tf || strategy.tradeTf] < TF_MS[sourceTf]) errs.push("A condition uses a TF smaller than the data TF.");
     if (errs.length) throw new Error(errs.join("\n"));
 
     const base = strategy.tradeTf === sourceTf ? source : resample(source, strategy.tradeTf);
@@ -27,11 +27,11 @@ self.onmessage = (e) => {
     };
     const periods = [];
     const full = run(s0, s1);
-    periods.push({ name: "Toàn bộ", ...full.st });
+    periods.push({ name: "All", ...full.st });
     if (split && split > base.t[s0] && split < base.t[s1 - 1]) {
       const m = idx(split);
-      periods.push({ name: "Giai đoạn 1", ...run(s0, m).st });
-      periods.push({ name: "Giai đoạn 2", ...run(m, s1).st });
+      periods.push({ name: "P1", ...run(s0, m).st });
+      periods.push({ name: "P2", ...run(m, s1).st });
     }
     // đường vốn theo từng lệnh + mức giá BTC (để vẽ), gọn tối đa ~600 điểm
     const tr = full.res.trades;

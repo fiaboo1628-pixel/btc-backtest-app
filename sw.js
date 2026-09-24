@@ -1,5 +1,5 @@
 // Service worker: lưu sẵn file của app để mở được khi không có mạng. Dữ liệu nến nằm trong IndexedDB.
-const CACHE = "backtest-v3";
+const CACHE = "backtest-v4";
 const FILES = [
   "./", "index.html", "css/app.css", "manifest.webmanifest", "icons/icon.svg",
   "js/app.js", "js/data.js", "js/catalog.js", "js/rules.js", "js/engine.js", "js/indicators.js",

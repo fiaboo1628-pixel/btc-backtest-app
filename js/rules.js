@@ -7,8 +7,8 @@ export const OPS = {
   ">=": { label: "≥", test: (x, v) => x >= v },
   "<": { label: "<", test: (x, v) => x < v },
   ">": { label: ">", test: (x, v) => x > v },
-  "crossAbove": { label: "cắt lên", test: (x, v, prev) => prev < v && x >= v },
-  "crossBelow": { label: "cắt xuống", test: (x, v, prev) => prev > v && x <= v },
+  "crossAbove": { label: "crosses ↑", test: (x, v, prev) => prev < v && x >= v },
+  "crossBelow": { label: "crosses ↓", test: (x, v, prev) => prev > v && x <= v },
 };
 
 /**
@@ -19,15 +19,15 @@ export const OPS = {
  */
 export function validateStrategy(s) {
   const errs = [];
-  if (!TF_MS[s.tradeTf]) errs.push(`Khung giao dịch không hợp lệ: ${s.tradeTf}`);
+  if (!TF_MS[s.tradeTf]) errs.push(`Invalid timeframe: ${s.tradeTf}`);
   for (const side of ["long", "short"]) {
     for (const [i, cond] of (s[side] || []).entries()) {
       const where = `${side === "long" ? "Long" : "Short"} #${i + 1}`;
-      if (!CATALOG_BY_ID[cond.ind]) errs.push(`${where}: không có chỉ báo "${cond.ind}"`);
-      if (!OPS[cond.op]) errs.push(`${where}: phép so sánh không hợp lệ`);
-      if (!Number.isFinite(cond.value)) errs.push(`${where}: ngưỡng phải là số`);
+      if (!CATALOG_BY_ID[cond.ind]) errs.push(`${where}: unknown indicator "${cond.ind}"`);
+      if (!OPS[cond.op]) errs.push(`${where}: invalid operator`);
+      if (!Number.isFinite(cond.value)) errs.push(`${where}: value must be a number`);
       const tf = cond.tf || s.tradeTf;
-      if (!TF_MS[tf] || TF_MS[tf] < TF_MS[s.tradeTf]) errs.push(`${where}: khung của điều kiện phải ≥ khung giao dịch`);
+      if (!TF_MS[tf] || TF_MS[tf] < TF_MS[s.tradeTf]) errs.push(`${where}: condition TF must be ≥ trade TF`);
     }
   }
   return errs;

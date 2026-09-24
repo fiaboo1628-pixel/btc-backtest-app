@@ -24,27 +24,27 @@ export async function proxy(request, fetchImpl = fetch) {
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-methods": "GET" } });
   }
-  if (request.method !== "GET") return json(405, { msg: "Chỉ hỗ trợ GET" });
+  if (request.method !== "GET") return json(405, { msg: "GET only" });
   const url = new URL(request.url);
   const target = TARGETS[url.searchParams.get("target")];
   const path = "/" + (url.searchParams.get("path") || "").replace(/^\/+/, "");
-  if (!target || !target.paths.includes(path)) return json(404, { msg: "Đường dẫn không được phép" });
+  if (!target || !target.paths.includes(path)) return json(404, { msg: "Path not allowed" });
 
   const q = new URLSearchParams();
   for (const [k, re] of Object.entries(PARAMS)) {
     const v = url.searchParams.get(k);
     if (v == null) continue;
-    if (!re.test(v)) return json(400, { msg: `Tham số ${k} không hợp lệ` });
+    if (!re.test(v)) return json(400, { msg: `Invalid ${k}` });
     q.set(k, v);
   }
-  if (!q.has("symbol")) return json(400, { msg: "Thiếu symbol" });
+  if (!q.has("symbol")) return json(400, { msg: "Missing symbol" });
   if (+q.get("limit") > 1500) q.set("limit", "1500");
 
   let upstream;
   try {
     upstream = await fetchImpl(`${target.base}${path}?${q}`, { headers: { accept: "application/json" } });
   } catch (e) {
-    return json(502, { msg: `Không gọi được Binance: ${e.message}` });
+    return json(502, { msg: `Binance unreachable: ${e.message}` });
   }
   const headers = {
     "content-type": upstream.headers.get("content-type") || "application/json",

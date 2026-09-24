@@ -1,21 +1,99 @@
 {
   "name": "DonchianRevert",
-  "description": "BTC M15 đánh hồi 2 chiều: giá sát đáy/đỉnh kênh Donchian 20, ADX > 30, volume thấp, ATR ≥ 0.4%.",
+  "description": "BTC 15m mean reversion: price at Donchian(20) extreme, ADX > 30, low volume, ATR ≥ 0.4%.",
   "tradeTf": "15m",
   "long": [
-    {"ind": "dpos", "params": {"n": 20}, "op": "<=", "value": 0.074},
-    {"ind": "adx", "params": {"n": 14}, "op": ">", "value": 30},
-    {"ind": "vol_ratio", "params": {"n": 96}, "op": "<", "value": 1.0},
-    {"ind": "vol_ratio", "params": {"n": 96}, "op": ">", "value": 0},
-    {"ind": "atr_pct", "params": {"n": 14}, "op": ">=", "value": 0.4}
+    {
+      "ind": "dpos",
+      "params": {
+        "n": 20
+      },
+      "op": "<=",
+      "value": 0.074
+    },
+    {
+      "ind": "adx",
+      "params": {
+        "n": 14
+      },
+      "op": ">",
+      "value": 30
+    },
+    {
+      "ind": "vol_ratio",
+      "params": {
+        "n": 96
+      },
+      "op": "<",
+      "value": 1.0
+    },
+    {
+      "ind": "vol_ratio",
+      "params": {
+        "n": 96
+      },
+      "op": ">",
+      "value": 0
+    },
+    {
+      "ind": "atr_pct",
+      "params": {
+        "n": 14
+      },
+      "op": ">=",
+      "value": 0.4
+    }
   ],
   "short": [
-    {"ind": "dpos", "params": {"n": 20}, "op": ">=", "value": 0.944},
-    {"ind": "adx", "params": {"n": 14}, "op": ">", "value": 30},
-    {"ind": "vol_ratio", "params": {"n": 96}, "op": "<", "value": 1.0},
-    {"ind": "vol_ratio", "params": {"n": 96}, "op": ">", "value": 0},
-    {"ind": "atr_pct", "params": {"n": 14}, "op": ">=", "value": 0.4}
+    {
+      "ind": "dpos",
+      "params": {
+        "n": 20
+      },
+      "op": ">=",
+      "value": 0.944
+    },
+    {
+      "ind": "adx",
+      "params": {
+        "n": 14
+      },
+      "op": ">",
+      "value": 30
+    },
+    {
+      "ind": "vol_ratio",
+      "params": {
+        "n": 96
+      },
+      "op": "<",
+      "value": 1.0
+    },
+    {
+      "ind": "vol_ratio",
+      "params": {
+        "n": 96
+      },
+      "op": ">",
+      "value": 0
+    },
+    {
+      "ind": "atr_pct",
+      "params": {
+        "n": 14
+      },
+      "op": ">=",
+      "value": 0.4
+    }
   ],
-  "exit": {"rAtr": 3, "trailStartR": 2, "trailDistR": 0.5, "maxHoldBars": 0},
-  "account": {"riskPct": 1, "maxLev": 5}
+  "exit": {
+    "rAtr": 3,
+    "trailStartR": 2,
+    "trailDistR": 0.5,
+    "maxHoldBars": 0
+  },
+  "account": {
+    "riskPct": 1,
+    "maxLev": 5
+  }
 }
