@@ -22,7 +22,10 @@
 <body>
 <header class="appbar">
   <div class="wrap">
-    <h1>Backtest <small id="dsLabel">No data</small></h1>
+    <div class="brand">
+      <span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 17l5-6 4 4 7-9"/></svg></span>
+      <h1>Backtest <small id="dsLabel">No data</small></h1>
+    </div>
   </div>
 </header>
 
@@ -100,12 +103,12 @@
       <p class="hint warn" id="tfNote"></p>
     </div>
 
-    <div class="card">
+    <div class="card side-long">
       <h2><span class="up">Long</span> <span class="tag">AND</span></h2>
       <div id="condLong" class="conds"></div>
       <button class="btn sm ghost" data-add="long" type="button">+ Add</button>
     </div>
-    <div class="card">
+    <div class="card side-short">
       <h2><span class="down">Short</span> <span class="tag">AND</span></h2>
       <div id="condShort" class="conds"></div>
       <button class="btn sm ghost" data-add="short" type="button">+ Add</button>
@@ -119,7 +122,7 @@
 
   <!-- ============================== RESULTS -->
   <section class="tab" id="tab-result" hidden>
-    <div class="card">
+    <div class="card range">
       <div class="grid2">
         <label>From <input type="date" id="rFrom"></label>
         <label>To <input type="date" id="rTo"></label>
@@ -127,14 +130,38 @@
       </div>
       <div id="attemptWarn"></div>
     </div>
-    <div class="card" id="resBox" hidden>
-      <p class="hint" id="resMeta"></p>
-      <p class="hint warn" id="resWarn"></p>
-      <div class="tablewrap"><table id="resPeriods"></table></div>
-      <svg id="eqChart" class="eq" viewBox="0 0 600 160" preserveAspectRatio="none" role="img" aria-label="Equity curve"></svg>
-      <div class="tablewrap"><table id="resYears"></table></div>
-      <p class="chips" id="resExits"></p>
-      <details class="more"><summary>Trades</summary><div class="tablewrap"><table id="resTrades"></table></div></details>
+    <div id="resBox" hidden>
+      <div class="card hero">
+        <div class="hero-top">
+          <div>
+            <div class="eyebrow">Total return</div>
+            <div class="big" id="resReturn">–</div>
+            <div class="sub" id="resSub"></div>
+          </div>
+          <div class="pillbox" id="resBadges"></div>
+        </div>
+        <svg id="eqChart" class="eq" viewBox="0 0 600 180" preserveAspectRatio="none" role="img" aria-label="Equity curve"></svg>
+        <div class="axis" id="eqAxis"></div>
+        <div class="kpis" id="resKpis"></div>
+        <p class="hint" id="resMeta"></p>
+        <p class="hint warn" id="resWarn"></p>
+      </div>
+      <div class="card">
+        <h2>By year</h2>
+        <div class="years" id="resYears"></div>
+      </div>
+      <div class="card">
+        <h2>Exits</h2>
+        <div class="exitbar" id="resExitBar"></div>
+        <p class="chips" id="resExits"></p>
+      </div>
+      <div class="card">
+        <h2>Periods</h2>
+        <div class="tablewrap"><table id="resPeriods"></table></div>
+      </div>
+      <div class="card">
+        <details class="more"><summary>Last trades</summary><div class="trades" id="resTrades"></div></details>
+      </div>
     </div>
   </section>
 </main>
