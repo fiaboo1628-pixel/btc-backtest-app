@@ -20,8 +20,8 @@ self.onmessage = (e) => {
     const a = atr(base.h, base.l, base.c, 14);
     const idx = (t) => { let i = 0; while (i < base.t.length && base.t[i] < t) i++; return i; };
     const s0 = Math.max(1, idx(from ?? base.t[0])), s1 = to ? idx(to) : base.t.length;
-    const run = (start, end) => {
-      const res = backtest(base, sig, a, { exit: strategy.exit, account: strategy.account, funding, startIdx: start, endIdx: end,
+    const run = (start, end, trace = false) => {
+      const res = backtest(base, sig, a, { exit: strategy.exit, account: strategy.account, funding, startIdx: start, endIdx: end, trace,
         ...(detail ? { detail: source, detailMs: TF_MS[strategy.tradeTf] } : {}) });
       const st = stats(res, strategy.account?.wallet ?? 1000, base.t[start], base.t[Math.max(start, end - 1)]);
       st.from = base.t[start]; st.to = base.t[Math.max(start, end - 1)];
@@ -29,7 +29,7 @@ self.onmessage = (e) => {
       return { res, st };
     };
     const periods = [];
-    const full = run(s0, s1);
+    const full = run(s0, s1, true);
     periods.push({ name: "All", ...full.st });
     if (split && split > base.t[s0] && split < base.t[s1 - 1]) {
       const m = idx(split);
@@ -45,7 +45,11 @@ self.onmessage = (e) => {
     for (let i = s0; i < s1; i++) { if (sig[i] === 1) signals.long++; else if (sig[i] === -1) signals.short++; }
     self.postMessage({
       id, ok: true, periods, equity, signals, candles: s1 - s0, detailTf: detail ? sourceTf : null,
-      trades: tr.slice(-300).reverse(),
+      trades: tr.slice(-300).reverse().map(({ path, ...x }) => x),
+      // cho Replay: mọi lệnh + đường stop theo từng nến
+      replay: tr.map((x) => ({ dir: x.dir, entryT: x.entryT, exitT: x.exitT, entry: x.entry, exit: x.exit, amount: x.amount,
+        pnl: x.pnl, reason: x.reason, balance: x.balance, path: x.path })),
+      range: [base.t[s0], base.t[s1 - 1]],
       exitReasons: tr.reduce((m, x) => ((m[x.reason] = (m[x.reason] || 0) + 1), m), {}),
     });
   } catch (err) {

@@ -36,7 +36,8 @@ export const DEFAULT_ACCOUNT = {
  * @param {Int8Array} sig  tín hiệu tại nến đóng: 1 = Long, -1 = Short, 0 = không
  * @param {Float64Array} atr ATR khung giao dịch (dùng tính R)
  * @param {object} opts    {exit, account, funding: [{t, rate, mark}], startIdx, endIdx,
- *                          detail: nến khung nhỏ {t,o,h,l,c} để quản lý lệnh bên trong nến, detailMs: độ dài nến giao dịch}
+ *                          detail: nến khung nhỏ {t,o,h,l,c} để quản lý lệnh bên trong nến, detailMs: độ dài nến giao dịch,
+ *                          trace: true → mỗi lệnh có path [[t, stop], …] (stop cuối mỗi nến, để xem lại/Replay)}
  */
 export function backtest(c, sig, atr, opts = {}) {
   const ex = { ...DEFAULT_EXIT, ...opts.exit };
@@ -89,6 +90,7 @@ export function backtest(c, sig, atr, opts = {}) {
       dir: pos.dir, entryT: pos.t0, exitT: c.t[i], entry: pos.entry, exit: p, amount: pos.amount,
       leverage: pos.lev, r: pos.r, pnl, fees, funding: fund, reason, bars: i - pos.i0,
       balance: acc.wallet + closedPnl,
+      ...(opts.trace ? { path: [...pos.path, [c.t[i], pos.stop]] } : {}),
     });
     pos = null;
   };
@@ -119,6 +121,7 @@ export function backtest(c, sig, atr, opts = {}) {
       if (amount > 0) {
         const stop = dir === 1 ? ceilStep(o - r, acc.priceStep) : floorStep(o + r, acc.priceStep);
         pos = { dir, entry: o, amount, lev, r, stop, stopRef: o, peak: o, i0: i, t0: c.t[i] };
+        if (opts.trace) pos.path = [[c.t[i], stop]];
         enteredNow = true;
       }
     }
@@ -135,6 +138,8 @@ export function backtest(c, sig, atr, opts = {}) {
       const out = manage(o, h, l, enteredNow);
       if (out) { close(i, out[0], out[1]); return d; }
     }
+
+    if (opts.trace) pos.path.push([c.t[i], pos.stop]);
 
     // 4) giới hạn thời gian giữ lệnh (thoát ở giá đóng cửa)
     if (ex.maxHoldBars > 0 && i - pos.i0 + 1 >= ex.maxHoldBars) { close(i, c.c[i], "time"); return d; }

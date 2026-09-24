@@ -143,6 +143,7 @@
         <svg id="eqChart" class="eq" viewBox="0 0 600 180" preserveAspectRatio="none" role="img" aria-label="Equity curve"></svg>
         <div class="axis" id="eqAxis"></div>
         <div class="kpis" id="resKpis"></div>
+        <button class="btn primary wide" id="btnReplay" type="button">&#9654;&nbsp; Replay trades</button>
         <p class="hint" id="resMeta"></p>
         <p class="hint warn" id="resWarn"></p>
       </div>
@@ -165,6 +166,32 @@
     </div>
   </section>
 </main>
+
+<!-- ============================== REPLAY (như Visual mode của MT5) -->
+<section class="replay" id="replay" hidden aria-label="Replay">
+  <header class="rp-top">
+    <button class="icon" id="rpClose" type="button" aria-label="Close">&#10005;</button>
+    <div class="rp-hud">
+      <div><span>Balance</span><b id="rpBal">–</b></div>
+      <div><span>Position</span><b id="rpPos">–</b></div>
+      <div><span>Trade</span><b id="rpNo">–</b></div>
+    </div>
+  </header>
+  <div class="rp-chart" id="rpChart"></div>
+  <div class="rp-bottom">
+    <div class="rp-row"><span class="rp-time" id="rpTime"></span>
+      <div class="seg rp-speed" id="rpSpeed"><button type="button">1×</button><button type="button">5×</button><button type="button">20×</button><button type="button">100×</button></div>
+    </div>
+    <input type="range" id="rpScrub" aria-label="Timeline">
+    <div class="rp-ctrl">
+      <button type="button" id="rpPrevTrade" aria-label="Previous trade">&#9198;</button>
+      <button type="button" id="rpPrev" aria-label="Back one bar">&#9664;</button>
+      <button type="button" id="rpPlay" class="rp-play" aria-label="Play">&#9654;</button>
+      <button type="button" id="rpNext" aria-label="Forward one bar">&#9654;&#65038;</button>
+      <button type="button" id="rpNextTrade" aria-label="Next trade">&#9197;</button>
+    </div>
+  </div>
+</section>
 
 <nav class="tabbar" aria-label="Tabs">
   <div class="wrap">
