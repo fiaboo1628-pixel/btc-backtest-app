@@ -1,0 +1,19 @@
+{
+  "name": "BB đánh hồi (Long + Short)",
+  "description": "Giá ra ngoài dải Bollinger, ADX > 30, volume thấp, ATR ≥ 0.4%. Biến thể dùng BB %B thay cho Donchian.",
+  "tradeTf": "15m",
+  "long": [
+    {"ind": "bb_pctb", "params": {"n": 20, "k": 2}, "op": "<=", "value": -0.027},
+    {"ind": "adx", "params": {"n": 14}, "op": ">", "value": 30},
+    {"ind": "vol_ratio", "params": {"n": 96}, "op": "<", "value": 1.0},
+    {"ind": "atr_pct", "params": {"n": 14}, "op": ">=", "value": 0.4}
+  ],
+  "short": [
+    {"ind": "bb_pctb", "params": {"n": 20, "k": 2}, "op": ">=", "value": 1.024},
+    {"ind": "adx", "params": {"n": 14}, "op": ">", "value": 30},
+    {"ind": "vol_ratio", "params": {"n": 96}, "op": "<", "value": 1.0},
+    {"ind": "atr_pct", "params": {"n": 14}, "op": ">=", "value": 0.4}
+  ],
+  "exit": {"rAtr": 3, "trailStartR": 2, "trailDistR": 0.5, "maxHoldBars": 0},
+  "account": {"riskPct": 1, "maxLev": 5}
+}
