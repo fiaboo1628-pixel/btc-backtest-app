@@ -1,0 +1,21 @@
+{
+  "strategy": "DonchianRevert",
+  "tuner": {
+    "host": "127.0.0.1",
+    "port": 8090,
+    "username": "doi-ten-dang-nhap",
+    "password": "doi-mat-khau-manh"
+  },
+  "lab": {
+    "api_url": "http://127.0.0.1:8081",
+    "username": "trung-voi-api_server-cua-lab",
+    "password": "trung-voi-api_server-cua-lab",
+    "strategy_dir": "../user_data/strategies_lab"
+  },
+  "live": {
+    "api_url": "http://127.0.0.1:8080",
+    "username": "trung-voi-api_server-cua-live",
+    "password": "trung-voi-api_server-cua-live",
+    "strategy_dir": "../user_data/strategies"
+  }
+}

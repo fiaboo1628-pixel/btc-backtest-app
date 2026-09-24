@@ -1,0 +1,16 @@
+{
+  "bot_name": "DonchianRevert-dryrun",
+  "strategy_path": "/freqtrade/user_data/strategies",
+  "api_server": { "listen_port": 8080 },
+  "order_types": {
+    "entry": "market",
+    "exit": "market",
+    "emergency_exit": "market",
+    "force_entry": "market",
+    "force_exit": "market",
+    "stoploss": "market",
+    "stoploss_on_exchange": false
+  },
+  "unfilledtimeout": { "entry": 5, "exit": 5, "unit": "minutes" },
+  "telegram": { "enabled": false, "token": "", "chat_id": "" }
+}

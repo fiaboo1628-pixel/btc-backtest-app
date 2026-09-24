@@ -1,0 +1,51 @@
+# Bộ paper trading (dry-run) cho DonchianRevert — xem README.md cùng thư mục.
+#   docker compose run --rm setup     # lần đầu: tạo mật khẩu, tải dữ liệu
+#   docker compose up -d              # chạy bot dry-run + LAB + trang Chỉnh tham số
+# Mọi cổng chỉ mở trên 127.0.0.1 của máy; truy cập từ xa qua Tailscale (README).
+
+x-ft: &ft
+  image: freqtradeorg/freqtrade:stable
+  restart: unless-stopped
+  volumes:
+    - "../user_data:/freqtrade/user_data"
+    - "./:/deploy"
+
+services:
+  live:
+    <<: *ft
+    container_name: donchian-live
+    ports: ["127.0.0.1:8080:8080"]          # FreqUI + API của bot (dry-run; có .env từ setup --api thì vào lệnh trên sàn)
+    command: >
+      trade
+      --logfile /freqtrade/user_data/logs/live.log
+      --db-url sqlite:////freqtrade/user_data/${BOT_DB:-dryrun}.sqlite
+      -c /deploy/config.base.json -c /deploy/config.live.json -c /deploy/secrets/live.json
+      ${BOT_EXTRA_CONFIG:-}
+
+  lab:
+    <<: *ft
+    container_name: donchian-lab
+    ports: ["127.0.0.1:8081:8081"]
+    command: >
+      webserver
+      --logfile /freqtrade/user_data/logs/lab.log
+      -c /deploy/config.base.json -c /deploy/config.lab.json -c /deploy/secrets/lab.json
+
+  tuner:
+    <<: *ft
+    container_name: donchian-tuner
+    ports: ["127.0.0.1:8090:8090"]          # trang Chỉnh tham số
+    volumes:
+      - "../user_data:/freqtrade/user_data"
+      - "./:/deploy"
+      - "../tuner:/tuner:ro"
+    entrypoint: ["python", "/tuner/server.py"]
+    command: ["-c", "/deploy/tuner.json"]
+    depends_on: [live, lab]
+
+  setup:
+    <<: *ft
+    restart: "no"
+    profiles: ["setup"]
+    entrypoint: ["python", "/deploy/setup.py"]
+    command: []

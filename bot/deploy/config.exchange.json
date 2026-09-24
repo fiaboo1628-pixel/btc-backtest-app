@@ -1,0 +1,6 @@
+{
+  "dry_run": false,
+  "exchange": {
+    "_ft_has_params": { "supports_demo_trading": true }
+  }
+}

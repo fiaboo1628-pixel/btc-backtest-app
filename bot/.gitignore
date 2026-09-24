@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+# sinh ra khi chạy dry-run (deploy/)
+user_data/data/
+user_data/logs/
+user_data/backtest_results/
+user_data/*.sqlite*
+user_data/strategies_lab/
+user_data/strategies/DonchianRevert.json
+user_data/strategies/param_backups/

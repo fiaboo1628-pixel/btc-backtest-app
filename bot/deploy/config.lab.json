@@ -1,0 +1,6 @@
+{
+  "bot_name": "DonchianRevert-lab",
+  "strategy_path": "/freqtrade/user_data/strategies_lab",
+  "api_server": { "listen_port": 8081 },
+  "fee": 0.00035
+}

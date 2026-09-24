@@ -2,3 +2,5 @@ tests/
 tools/
 node_modules/
 !node_modules/@vercel/analytics/
+bot/
+.devcontainer/
