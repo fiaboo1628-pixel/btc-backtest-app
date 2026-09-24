@@ -1,8 +1,12 @@
+import { inject } from "@vercel/analytics";
 import * as Data from "./data.js";
 import { CATALOG, CATALOG_BY_ID, paramsWithDefaults } from "./catalog.js";
 import { OPS } from "./rules.js";
 import { TF_MS, TF_LIST } from "./timeframes.js";
 import { DEFAULT_EXIT, DEFAULT_ACCOUNT } from "./engine.js";
+
+// Initialize Vercel Web Analytics
+inject();
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
