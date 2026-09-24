@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1115">
+<title>Chỉnh tham số</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --panel-2: #1e222b; --line: #2a2f3a;
+    --text: #e8eaef; --muted: #9aa3b2; --accent: #4c8dff; --accent-ink: #fff;
+    --up: #2fbf71; --down: #ef5350; --warn: #f5a524;
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f4f5f7; --panel: #fff; --panel-2: #f0f2f5; --line: #dde1e7;
+      --text: #151821; --muted: #5f6878; --accent: #2563eb; --up: #16a34a; --down: #dc2626; --warn: #b7791f;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { padding: env(safe-area-inset-top) 0 calc(96px + env(safe-area-inset-bottom)); }
+  .wrap { max-width: 680px; margin: 0 auto; padding: 0 16px; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--bg);
+    border-bottom: 1px solid var(--line); padding: 12px 0 10px; }
+  header .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+  h1 { font-size: 17px; margin: 0; flex: 1 1 180px; }
+  h1 small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
+  .pill { font-size: 12px; padding: 4px 10px; border-radius: 999px; background: var(--panel-2);
+    border: 1px solid var(--line); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .pill.ok { color: var(--up); } .pill.bad { color: var(--down); } .pill.dry { color: var(--warn); }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    margin: 14px 0; padding: 14px 14px 6px; scroll-margin-top: 110px; }
+  section > h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--muted); margin: 0 0 8px; font-weight: 600; }
+  .param { padding: 10px 0 12px; border-top: 1px solid var(--line); }
+  .param:first-of-type { border-top: 0; }
+  .param .row { display: flex; align-items: center; gap: 10px; }
+  .param label { flex: 1; font-weight: 600; font-size: 14px; }
+  .param .help { color: var(--muted); font-size: 12.5px; margin: 2px 0 8px; }
+  .param input[type=number] { width: 92px; font: inherit; text-align: right; padding: 6px 8px;
+    border-radius: 9px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); }
+  .param input[type=range] { width: 100%; accent-color: var(--accent); margin: 0; }
+  .param .meta { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .changed label::after { content: "đã đổi"; margin-left: 8px; font-size: 11px; font-weight: 500;
+    color: var(--warn); border: 1px solid currentColor; border-radius: 6px; padding: 0 5px; }
+  .switch { position: relative; width: 48px; height: 28px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch span { position: absolute; inset: 0; border-radius: 999px; background: var(--line); transition: .15s; }
+  .switch span::before { content: ""; position: absolute; width: 22px; height: 22px; left: 3px; top: 3px;
+    border-radius: 50%; background: #fff; transition: .15s; }
+  .switch input:checked + span { background: var(--accent); }
+  .switch input:checked + span::before { transform: translateX(20px); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .chip { font: inherit; font-size: 13px; padding: 7px 12px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--panel-2); color: var(--text); }
+  .chip[aria-pressed=true] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .dates { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+  .dates label { font-size: 12px; color: var(--muted); display: grid; gap: 4px; }
+  .dates input { font: inherit; padding: 7px 8px; border-radius: 9px; border: 1px solid var(--line);
+    background: var(--panel-2); color: var(--text); width: 100%; }
+  .btn { font: inherit; font-weight: 600; border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px; background: var(--panel-2); color: var(--text); cursor: pointer; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .btn.danger { background: transparent; border-color: var(--down); color: var(--down); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn.sm { padding: 7px 10px; font-size: 13px; font-weight: 500; }
+  .links { display: flex; gap: 8px; flex-wrap: wrap; padding-bottom: 8px; }
+  .bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; background: var(--bg);
+    border-top: 1px solid var(--line); padding: 10px 0 calc(10px + env(safe-area-inset-bottom)); }
+  .bar .wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .progress { height: 6px; border-radius: 99px; background: var(--panel-2); overflow: hidden; margin: 6px 0 10px; }
+  .progress i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
+  .kpi { background: var(--panel-2); border-radius: 11px; padding: 9px 10px; }
+  .kpi b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
+  .kpi span { font-size: 11.5px; color: var(--muted); }
+  .kpi em { font-style: normal; font-size: 11.5px; margin-left: 4px; }
+  .up { color: var(--up); } .down { color: var(--down); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; margin-bottom: 10px; }
+  th, td { text-align: right; padding: 6px 4px; border-top: 1px solid var(--line); }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  svg.eq { width: 100%; height: 120px; display: block; margin-bottom: 8px; }
+  .note { color: var(--muted); font-size: 12.5px; margin: 4px 0 10px; }
+  .msg { padding: 10px 12px; border-radius: 11px; font-size: 13.5px; margin: 0 0 10px; }
+  .msg.err { background: color-mix(in srgb, var(--down) 15%, transparent); color: var(--down); }
+  .msg.ok { background: color-mix(in srgb, var(--up) 15%, transparent); color: var(--up); }
+  .msg.warn { background: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn); }
+  .hist { border-top: 1px solid var(--line); padding: 10px 0; display: grid; gap: 4px; }
+  .hist:first-of-type { border-top: 0; }
+  .hist .top { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 8px; font-size: 13.5px; }
+  .hist .diff { color: var(--muted); font-size: 12px; word-break: break-word; }
+  dialog { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel);
+    color: var(--text); width: min(92vw, 520px); padding: 16px; }
+  dialog::backdrop { background: rgb(0 0 0 / .55); }
+  dialog h3 { margin: 0 0 8px; font-size: 17px; }
+  dialog .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1 id="title">Chỉnh tham số<small id="subtitle">Đang tải…</small></h1>
+    <span class="pill" id="livePill">Bot live: …</span>
+  </div>
+</header>
+
+<main class="wrap">
+  <div id="topMsg"></div>
+
+  <div id="paramSections"></div>
+
+  <section>
+    <h2>Khoảng thời gian backtest</h2>
+    <div class="chips" id="ranges"></div>
+    <div class="dates">
+      <label>Từ ngày <input type="date" id="dFrom"></label>
+      <label>Đến ngày (trống = đến nay) <input type="date" id="dTo"></label>
+    </div>
+    <div class="links">
+      <button class="btn sm" id="btnDefault" type="button">Về mặc định</button>
+      <button class="btn sm" id="btnLive" type="button">Lấy tham số đang chạy</button>
+    </div>
+  </section>
+
+  <section id="resultBox" class="hidden">
+    <h2>Kết quả backtest</h2>
+    <div id="resultMsg"></div>
+    <div class="progress hidden" id="prog"><i></i></div>
+    <div id="result"></div>
+  </section>
+
+  <section id="histBox" class="hidden">
+    <h2>Các lần chạy gần đây</h2>
+    <div id="hist"></div>
+  </section>
+</main>
+
+<div class="bar">
+  <div class="wrap">
+    <button class="btn primary" id="btnRun" type="button">Chạy backtest</button>
+    <button class="btn danger" id="btnApply" type="button">Áp dụng live</button>
+  </div>
+</div>
+
+<dialog id="confirm">
+  <h3>Áp dụng cho bot live?</h3>
+  <div id="confirmBody"></div>
+  <div class="actions">
+    <button class="btn" id="cNo" type="button">Huỷ</button>
+    <button class="btn danger" id="cYes" type="button">Áp dụng</button>
+  </div>
+</dialog>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const state = { schema: null, values: {}, lastRun: null, polling: false, range: "all" };
+const fmt = (n, d = 2) => (n == null || isNaN(n)) ? "–" : Number(n).toLocaleString("vi-VN", { maximumFractionDigits: d, minimumFractionDigits: d });
+const sign = (n, d = 1) => (n > 0 ? "+" : "") + fmt(n, d);
+const cls = (n) => n > 0 ? "up" : n < 0 ? "down" : "";
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
+  let data = null;
+  try { data = await r.json(); } catch { /* không phải JSON */ }
+  if (!r.ok) throw new Error((data && data.detail) || `HTTP ${r.status}`);
+  return data;
+}
+function msg(el, text, kind = "err") { el.innerHTML = text ? `<div class="msg ${kind}">${esc(text)}</div>` : ""; }
+
+// ---------------------------------------------------------------- khoảng thời gian
+const RANGES = [
+  { id: "all", label: "2021 → nay", from: "2021-01-01", to: "" },
+  { id: "is", label: "2021–2024", from: "2021-01-01", to: "2025-01-01" },
+  { id: "oos", label: "2025 → nay", from: "2025-01-01", to: "" },
+  { id: "1y", label: "12 tháng", from: null, to: "" },
+];
+function setRange(id) {
+  const r = RANGES.find((x) => x.id === id);
+  state.range = id;
+  let from = r.from;
+  if (!from) { const d = new Date(); d.setFullYear(d.getFullYear() - 1); from = d.toISOString().slice(0, 10); }
+  $("#dFrom").value = from; $("#dTo").value = r.to;
+  document.querySelectorAll("#ranges .chip").forEach((c) => c.setAttribute("aria-pressed", c.dataset.id === id));
+}
+function timerange() {
+  const f = $("#dFrom").value.replaceAll("-", ""), t = $("#dTo").value.replaceAll("-", "");
+  return `${f}-${t}`;
+}
+
+// ---------------------------------------------------------------- form tham số
+function stepOf(p) { return p.type === "int" ? 1 : Math.pow(10, -p.decimals); }
+function renderParams() {
+  const { params, spaces } = state.schema;
+  const box = $("#paramSections"); box.innerHTML = "";
+  for (const [space, title] of Object.entries(spaces)) {
+    const list = params.filter((p) => p.space === space);
+    if (!list.length) continue;
+    const sec = document.createElement("section");
+    sec.innerHTML = `<h2>${esc(title)}</h2>`;
+    for (const p of list) {
+      const div = document.createElement("div");
+      div.className = "param"; div.dataset.name = p.name;
+      const id = `p_${p.name}`;
+      if (p.type === "bool") {
+        div.innerHTML = `<div class="row"><label for="${id}">${esc(p.label)}</label>
+          <span class="switch"><input type="checkbox" id="${id}"><span></span></span></div>
+          <div class="help">${esc(p.help)}</div>`;
+        div.querySelector("input").addEventListener("change", (e) => setVal(p, e.target.checked));
+      } else {
+        const st = stepOf(p);
+        div.innerHTML = `<div class="row"><label for="${id}">${esc(p.label)}</label>
+          <input type="number" id="${id}" min="${p.min}" max="${p.max}" step="${st}" inputmode="decimal"></div>
+          <div class="help">${esc(p.help)}</div>
+          <input type="range" min="${p.min}" max="${p.max}" step="${st}" aria-label="${esc(p.label)}">
+          <div class="meta"><span>${p.min}</span><span>mặc định ${p.default}</span><span>${p.max}</span></div>`;
+        const num = div.querySelector("input[type=number]"), rng = div.querySelector("input[type=range]");
+        rng.addEventListener("input", () => setVal(p, Number(rng.value)));
+        num.addEventListener("change", () => {
+          let v = Number(num.value);
+          if (isNaN(v)) v = state.values[p.name];
+          v = Math.min(p.max, Math.max(p.min, v));
+          setVal(p, v);
+        });
+      }
+      sec.appendChild(div);
+    }
+    box.appendChild(sec);
+  }
+  syncInputs();
+}
+function setVal(p, v) {
+  if (p.type === "int") v = Math.round(v);
+  else if (p.type === "decimal") v = Number(v.toFixed(p.decimals));
+  state.values[p.name] = v;
+  syncInputs();
+}
+function syncInputs() {
+  for (const p of state.schema.params) {
+    const div = document.querySelector(`.param[data-name="${p.name}"]`);
+    const v = state.values[p.name];
+    if (p.type === "bool") div.querySelector("input").checked = !!v;
+    else { div.querySelector("input[type=number]").value = v; div.querySelector("input[type=range]").value = v; }
+    div.classList.toggle("changed", v !== state.schema.live[p.name]);
+  }
+  updateApplyState();
+}
+function diffText(a, b) {
+  const out = [];
+  for (const p of state.schema.params) if (a[p.name] !== b[p.name]) {
+    const show = (x) => p.type === "bool" ? (x ? "bật" : "tắt") : x;
+    out.push(`${p.label}: ${show(b[p.name])} → ${show(a[p.name])}`);
+  }
+  return out;
+}
+const same = (a, b) => state.schema.params.every((p) => a[p.name] === b[p.name]);
+
+// ---------------------------------------------------------------- bot live
+async function refreshLive() {
+  const pill = $("#livePill");
+  try {
+    const s = await api("/api/live");
+    if (!s.reachable) { pill.className = "pill bad"; pill.textContent = "Bot live: mất kết nối"; return; }
+    const mode = s.dry_run ? "Dry-run" : "Live";
+    const running = s.state === "running";
+    pill.className = "pill " + (!running ? "bad" : s.dry_run ? "dry" : "ok");
+    pill.textContent = `${mode} · ${running ? "đang chạy" : "đã dừng"} · ${s.open_trades} lệnh mở · ${sign(s.profit_pct)}%`;
+  } catch { pill.className = "pill bad"; pill.textContent = "Bot live: lỗi"; }
+}
+
+// ---------------------------------------------------------------- backtest
+async function runBacktest() {
+  msg($("#resultMsg"), "");
+  $("#resultBox").classList.remove("hidden");
+  $("#btnRun").disabled = true;
+  try {
+    await api("/api/backtest", { method: "POST", body: JSON.stringify({ params: state.values, timerange: timerange() }) });
+    poll();
+  } catch (e) { msg($("#resultMsg"), e.message); $("#btnRun").disabled = false; }
+}
+async function poll() {
+  if (state.polling) return;
+  state.polling = true;
+  const prog = $("#prog"); prog.classList.remove("hidden");
+  try {
+    for (;;) {
+      const r = await api("/api/backtest");
+      prog.firstElementChild.style.width = `${Math.round((r.progress || 0) * 100)}%`;
+      if (r.running) { msg($("#resultMsg"), `Đang chạy: ${r.step || "…"}`, "warn"); await new Promise((ok) => setTimeout(ok, 1500)); continue; }
+      if (r.status === "error") {
+        // không hiện kết quả của lần chạy trước như thể là kết quả mới
+        msg($("#resultMsg"), r.message || "Backtest lỗi");
+        state.lastRun = null; $("#result").innerHTML = "";
+      } else {
+        msg($("#resultMsg"), "");
+        if (r.last) { state.lastRun = r.last; renderResult(r.last); loadHistory(); }
+      }
+      break;
+    }
+  } catch (e) { msg($("#resultMsg"), e.message); }
+  prog.classList.add("hidden");
+  state.polling = false; $("#btnRun").disabled = false; updateApplyState();
+}
+function equitySvg(eq) {
+  if (!eq || eq.length < 2) return "";
+  const w = 600, h = 120, pad = 4;
+  const ys = eq.map((e) => e[1]), lo = Math.min(...ys), hi = Math.max(...ys), span = hi - lo || 1;
+  const pts = eq.map((e, i) => `${(pad + i * (w - 2 * pad) / (eq.length - 1)).toFixed(1)},${(h - pad - (e[1] - lo) * (h - 2 * pad) / span).toFixed(1)}`).join(" ");
+  const base = h - pad - (eq[0][1] - lo) * (h - 2 * pad) / span;
+  const col = ys[ys.length - 1] >= ys[0] ? "var(--up)" : "var(--down)";
+  return `<svg class="eq" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Đường vốn">
+    <line x1="0" x2="${w}" y1="${base}" y2="${base}" stroke="var(--line)" stroke-dasharray="4 4"/>
+    <polyline points="${pts}" fill="none" stroke="${col}" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`;
+}
+function renderResult(run) {
+  const r = run.result, cur = r.stake_currency;
+  const prev = findBaseline(run);
+  const delta = (k) => prev ? `<em class="${cls(r[k] - prev.result[k])}">${sign(r[k] - prev.result[k])}</em>` : "";
+  const ddDelta = prev ? `<em class="${cls(prev.result.max_dd_pct - r.max_dd_pct)}">${sign(r.max_dd_pct - prev.result.max_dd_pct)}</em>` : "";
+  const years = r.years.map((y) => `<tr><td>${y.year}</td><td>${y.trades}</td>
+      <td class="${cls(y.profit_abs)}">${sign(y.profit_abs, 0)}</td><td>${fmt(y.profit_factor)}</td></tr>`).join("");
+  $("#result").innerHTML = `
+    <p class="note">${esc(r.timerange)} · ${r.trades} lệnh (${r.trades_long ?? "–"} Long / ${r.trades_short ?? "–"} Short)
+      ${prev ? `· so với lần chạy trước cùng khoảng thời gian` : ""}</p>
+    <div class="kpis">
+      <div class="kpi"><b class="${cls(r.profit_pct)}">${sign(r.profit_pct)}%</b><span>Lợi nhuận</span>${delta("profit_pct")}</div>
+      <div class="kpi"><b>${fmt(r.max_dd_pct, 1)}%</b><span>Sụt giảm tối đa</span>${ddDelta}</div>
+      <div class="kpi"><b>${fmt(r.profit_factor)}</b><span>Profit factor</span></div>
+      <div class="kpi"><b>${fmt(r.winrate_pct, 1)}%</b><span>Tỉ lệ thắng</span></div>
+      <div class="kpi"><b class="${cls(r.cagr_pct)}">${sign(r.cagr_pct)}%</b><span>Mỗi năm</span></div>
+      <div class="kpi"><b class="${cls(r.market_change_pct)}">${sign(r.market_change_pct)}%</b><span>Giá BTC</span></div>
+    </div>
+    ${equitySvg(r.equity)}
+    <table><thead><tr><th>Năm</th><th>Lệnh</th><th>Lãi/lỗ (${esc(cur)})</th><th>PF</th></tr></thead><tbody>${years}</tbody></table>
+    ${!same(run.params, state.values) ? `<div class="msg warn">Tham số trên form đã đổi sau lần chạy này.</div>` : ""}`;
+}
+function findBaseline(run) {
+  return (state.history || []).find((h) => h !== run && h.at !== run.at && h.timerange === run.timerange) || null;
+}
+async function loadHistory() {
+  try {
+    const h = await api("/api/history");
+    state.history = h;
+    if (!h.length) return;
+    $("#histBox").classList.remove("hidden");
+    $("#hist").innerHTML = h.map((x, i) => {
+      const d = diffText(x.params, state.schema.live);
+      return `<div class="hist"><div class="top"><span>${esc(x.result.timerange)}</span>
+        <span><b class="${cls(x.result.profit_pct)}">${sign(x.result.profit_pct)}%</b> · DD ${fmt(x.result.max_dd_pct, 1)}% · ${x.result.trades} lệnh</span></div>
+        <div class="diff">${d.length ? esc(d.join(" · ")) : "Giống tham số đang chạy"}</div>
+        <div><button class="btn sm" data-i="${i}" type="button">Dùng bộ tham số này</button></div></div>`;
+    }).join("");
+    $("#hist").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+      state.values = { ...h[Number(b.dataset.i)].params }; syncInputs(); window.scrollTo({ top: 0, behavior: "smooth" });
+    }));
+  } catch { /* bỏ qua */ }
+}
+
+// ---------------------------------------------------------------- áp dụng live
+function updateApplyState() {
+  if (!state.schema) return;
+  const isLive = same(state.values, state.schema.live);
+  $("#btnApply").disabled = isLive;
+  $("#btnApply").textContent = isLive ? "Live đang dùng bộ này" : "Áp dụng live";
+}
+function openConfirm() {
+  const d = diffText(state.values, state.schema.live);
+  const tested = state.lastRun && same(state.lastRun.params, state.values);
+  $("#confirmBody").innerHTML = `
+    <p class="note">Bot đang chạy sẽ nạp lại chiến lược với tham số mới. Lệnh đang mở giữ nguyên stoploss đã tính khi vào lệnh.</p>
+    <ul>${d.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
+    ${tested ? "" : `<div class="msg warn">Bộ tham số này CHƯA được backtest. Nên chạy backtest trước.</div>`}`;
+  $("#confirm").showModal();
+}
+async function applyLive() {
+  $("#confirm").close();
+  try {
+    const r = await api("/api/apply", { method: "POST", body: JSON.stringify({ params: state.values }) });
+    msg($("#topMsg"), r.message, r.reloaded ? "ok" : "warn");
+    const s = await api("/api/schema"); state.schema.live = s.live; syncInputs(); refreshLive(); loadHistory();
+  } catch (e) { msg($("#topMsg"), e.message); }
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+// ---------------------------------------------------------------- khởi động
+async function init() {
+  $("#ranges").innerHTML = RANGES.map((r) => `<button class="chip" type="button" data-id="${r.id}">${r.label}</button>`).join("");
+  $("#ranges").querySelectorAll(".chip").forEach((c) => c.addEventListener("click", () => setRange(c.dataset.id)));
+  ["#dFrom", "#dTo"].forEach((s) => $(s).addEventListener("change", () =>
+    document.querySelectorAll("#ranges .chip").forEach((c) => c.setAttribute("aria-pressed", "false"))));
+  setRange("all");
+  try {
+    state.schema = await api("/api/schema");
+  } catch (e) { msg($("#topMsg"), `Không tải được tham số: ${e.message}`); return; }
+  $("#subtitle").textContent = `${state.schema.strategy} · BTC/USDT 15m`;
+  state.values = { ...state.schema.lab };
+  renderParams();
+  $("#btnRun").addEventListener("click", runBacktest);
+  $("#btnApply").addEventListener("click", openConfirm);
+  $("#cNo").addEventListener("click", () => $("#confirm").close());
+  $("#cYes").addEventListener("click", applyLive);
+  $("#btnDefault").addEventListener("click", () => {
+    for (const p of state.schema.params) state.values[p.name] = p.default; syncInputs();
+  });
+  $("#btnLive").addEventListener("click", () => { state.values = { ...state.schema.live }; syncInputs(); });
+  refreshLive(); setInterval(refreshLive, 30000);
+  await loadHistory();
+  const r = await api("/api/backtest").catch(() => null);
+  if (r && r.running) { $("#resultBox").classList.remove("hidden"); poll(); }
+  else if (r && r.status === "error") { $("#resultBox").classList.remove("hidden"); msg($("#resultMsg"), r.message || "Backtest lỗi"); }
+  else if (r && r.last) { state.lastRun = r.last; $("#resultBox").classList.remove("hidden"); renderResult(r.last); }
+}
+init();
+</script>
+</body>
+</html>

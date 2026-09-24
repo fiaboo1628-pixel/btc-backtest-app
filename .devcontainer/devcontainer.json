@@ -1,0 +1,22 @@
+{
+  // Codespaces để chạy thử bot DonchianRevert (bot/deploy). Xem README trong thư mục đó.
+  // Chọn region Southeast Asia khi tạo codespace: Binance chặn IP ở Mỹ.
+  "name": "donchian-bot",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "hostRequirements": { "cpus": 2, "memory": "4gb" },
+  // Tự cài và bật bot khi tạo; mỗi lần mở lại codespace thì bật lại bot.
+  "onCreateCommand": "printf '# Bot đang cài…\\n\\nMở lại file này sau 2–3 phút.\\n' > bot/deploy/BOT_LOGIN.md",
+  "postCreateCommand": "bash .devcontainer/start-bot.sh",
+  "postStartCommand": "cd bot/deploy && [ -f secrets/live.json ] && docker compose up -d || true",
+  "forwardPorts": [8080, 8090],
+  "portsAttributes": {
+    "8080": { "label": "FreqUI (bot)", "onAutoForward": "openBrowserOnce" },
+    "8090": { "label": "Chỉnh tham số", "onAutoForward": "notify" }
+  },
+  "customizations": {
+    "codespaces": { "openFiles": ["bot/deploy/BOT_LOGIN.md"] }
+  }
+}

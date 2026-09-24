@@ -1,0 +1,50 @@
+# Nghiên cứu nhiều coin với dữ liệu Binance Futures thật (data.binance.vision).
+# Cài freqtrade bằng pip (có sẵn wheel TA-Lib). Chạy khi đẩy lên nhánh claude/** hoặc research/** có sửa bot/research/ hay chiến lược; hoặc bấm Run workflow.
+name: research
+
+on:
+  workflow_dispatch:
+    inputs:
+      pairs:
+        description: "Coin, cách nhau bởi dấu cách"
+        default: "BTC ETH SOL BNB XRP DOGE ADA LINK AVAX LTC"
+      buy:
+        description: 'Tham số buy JSON, ví dụ {"htf_trend": true}'
+        default: "{}"
+      sell:
+        description: 'Tham số sell JSON, ví dụ {"r_atr": 2.0}'
+        default: "{}"
+  push:
+    branches: ["claude/**", "research/**"]
+    paths: ["bot/research/**", "bot/user_data/strategies/**", "bot/run_futures.py", ".github/workflows/research.yml"]
+
+jobs:
+  multi-coin:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bot
+    timeout-minutes: 120
+    env:
+      PAIRS: ${{ inputs.pairs || 'BTC ETH SOL BNB XRP DOGE ADA LINK AVAX LTC' }}
+      BUY: ${{ inputs.buy || '{}' }}
+      SELL: ${{ inputs.sell || '{}' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: .github/workflows/research.yml
+      - name: Cài freqtrade
+        run: pip install -q freqtrade
+      - name: Tải dữ liệu Binance Futures (data.binance.vision)
+        run: |
+          END=$(date -u -d "$(date -u +%Y-%m-01) -1 month" +%Y-%m)
+          python research/binance_vision.py --pairs $PAIRS --start 2020-10 --end $END --out data/binance
+      - name: Backtest từng coin và danh mục
+        run: python research/multi_coin.py --pairs $PAIRS --datadir data/binance --timerange 20210101- --buy "$BUY" --sell "$SELL"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-result
+          path: bot/research_result.md
