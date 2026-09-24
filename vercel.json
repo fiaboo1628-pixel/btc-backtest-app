@@ -1,0 +1,15 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/binance.js": {
+      "regions": ["hnd1"],
+      "maxDuration": 15
+    }
+  },
+  "rewrites": [
+    { "source": "/api/binance/:target/:path*", "destination": "/api/binance?target=:target&path=:path*" }
+  ],
+  "headers": [
+    { "source": "/sw.js", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] }
+  ]
+}

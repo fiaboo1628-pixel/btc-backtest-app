@@ -109,13 +109,42 @@ async function getJson(url, signal) {
   }
 }
 
+// Proxy cùng tên miền (api/binance.js khi chạy trên Vercel). Trên host tĩnh khác (GitHub Pages...) nó trả 404
+// và app giữ lỗi gốc.
+const proxyBase = (market) => (typeof location !== "undefined" && /^https?:$/.test(location.protocol)
+  ? `${location.origin}/api/binance/${market === "futures" ? "fapi" : "spot"}` : null);
+const PROXY_KEY = (market) => `viaProxy:${market}`;
+const remembered = (market) => { try { return localStorage.getItem(PROXY_KEY(market)) === "1"; } catch { return false; } };
+const remember = (market) => { try { localStorage.setItem(PROXY_KEY(market), "1"); } catch { /* bộ nhớ bị chặn */ } };
+
+/**
+ * Chọn đường gọi Binance: địa chỉ tự nhập > proxy đã nhớ > gọi thẳng; gọi thẳng lỗi mạng/CORS hoặc bị chặn vùng
+ * (451/403) thì thử proxy cùng tên miền và nhớ lựa chọn.
+ */
+async function resolveBase(market, apiBase, signal) {
+  if (apiBase) return { base: apiBase, via: "proxy tự nhập" };
+  const m = MARKETS[market], px = proxyBase(market);
+  if (px && remembered(market)) return { base: px, via: "proxy của app" };
+  const probe = (base) => getJson(`${base}${m.klines}?symbol=BTCUSDT&interval=1h&limit=1`, signal);
+  try {
+    await probe(m.base);
+    return { base: m.base, via: "trực tiếp" };
+  } catch (e) {
+    const blocked = e instanceof TypeError || /HTTP (451|403)/.test(e.message);
+    if (e.name === "AbortError" || !px || !blocked) throw e;
+    try { await probe(px); } catch { throw e; }
+    remember(market);
+    return { base: px, via: "proxy của app" };
+  }
+}
+
 /** Kiểm tra trình duyệt gọi được API Binance không (CORS, chặn vùng). */
 export async function testConnection(market, apiBase) {
   const m = MARKETS[market];
-  const base = apiBase || m.base;
   const t0 = performance.now();
+  const { base, via } = await resolveBase(market, apiBase);
   const rows = await getJson(`${base}${m.klines}?symbol=BTCUSDT&interval=1h&limit=2`);
-  return { ok: Array.isArray(rows) && rows.length > 0, ms: Math.round(performance.now() - t0) };
+  return { ok: Array.isArray(rows) && rows.length > 0, ms: Math.round(performance.now() - t0), via };
 }
 
 /**
@@ -124,7 +153,7 @@ export async function testConnection(market, apiBase) {
  */
 export async function download({ market, symbol, tf, from, apiBase, onProgress, signal }) {
   const m = MARKETS[market];
-  const base = apiBase || m.base;
+  const { base } = await resolveBase(market, apiBase, signal);
   const id = datasetId(market, symbol, tf);
   const existing = await loadDataset(id);
   const ms = TF_MS[tf];

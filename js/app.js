@@ -349,7 +349,7 @@ async function init() {
   $("#btnTest").addEventListener("click", async () => {
     try {
       const r = await Data.testConnection($("#dlMarket").value, $("#apiBase").value.trim() || undefined);
-      toast(r.ok ? `Kết nối Binance được (${r.ms} ms).` : "Binance trả về dữ liệu rỗng.", r.ok ? "ok" : "warn");
+      toast(r.ok ? `Kết nối Binance được (${r.via}, ${r.ms} ms).` : "Binance trả về dữ liệu rỗng.", r.ok ? "ok" : "warn");
     } catch (e) {
       toast(`Không gọi được Binance: ${e.message}\nNếu là lỗi mạng/CORS, cần dùng proxy (mục Nâng cao) hoặc nhập CSV.`, "err");
     }
