@@ -11,6 +11,13 @@
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="css/app.css">
+<script type="importmap">
+{
+  "imports": {
+    "@vercel/analytics": "./node_modules/@vercel/analytics/dist/index.mjs"
+  }
+}
+</script>
 </head>
 <body>
 <header class="appbar">
@@ -169,8 +176,5 @@
 </template>
 
 <script type="module" src="js/app.js"></script>
-
-<!-- Vercel Web Analytics -->
-<script defer src="https://cdn.vercel-insights.com/v1/script.js"></script>
 </body>
 </html>
