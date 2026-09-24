@@ -1,0 +1,2 @@
+tests/fixtures/_*
+node_modules/
