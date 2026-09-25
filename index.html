@@ -35,7 +35,8 @@
   <!-- ============================== DATA -->
   <section class="tab" id="tab-data">
     <div class="card">
-      <h2>Download</h2>
+      <h2>1 · Get price data</h2>
+      <p class="hint">Free Binance history, saved on this phone. Download once, later tap <b>Update</b> to add new candles.</p>
       <div class="grid2">
         <label>Market
           <select id="dlMarket">
@@ -43,43 +44,48 @@
             <option value="spot">Spot</option>
           </select>
         </label>
-        <label>Symbol <input id="dlSymbol" value="BTCUSDT" autocapitalize="characters" spellcheck="false"></label>
-        <label>Timeframe
+        <label>Coin <input id="dlSymbol" value="BTCUSDT" autocapitalize="characters" spellcheck="false"></label>
+        <label>Candle size
           <select id="dlTf">
-            <option value="1m">1m</option>
-            <option value="5m" selected>5m</option>
-            <option value="15m">15m</option>
-            <option value="1h">1h</option>
+            <option value="1m">1m · best</option>
+            <option value="5m" selected>5m · good</option>
+            <option value="15m">15m · rough</option>
+            <option value="1h">1h · rough</option>
           </select>
         </label>
-        <label>From <input type="date" id="dlFrom" value="2021-01-01"></label>
+        <label>Start date <input type="date" id="dlFrom" value="2021-01-01"></label>
       </div>
+      <p class="hint" id="tfHelp"></p>
       <p class="hint" id="dlHint"></p>
       <div class="progress hidden" id="dlProg"><i></i></div>
       <p class="hint" id="dlStatus"></p>
       <div class="row">
         <button class="btn primary grow" id="btnDownload" type="button">Download</button>
         <button class="btn" id="btnCancel" type="button" hidden>Stop</button>
-        <button class="btn" id="btnTest" type="button">Test</button>
       </div>
       <details class="more">
-        <summary>Advanced</summary>
-        <label>Proxy URL <input id="apiBase" placeholder="optional" spellcheck="false"></label>
+        <summary>Problems downloading? · Import CSV</summary>
+        <div class="row">
+          <button class="btn sm" id="btnTest" type="button">Check Binance connection</button>
+        </div>
+        <label>Proxy URL <input id="apiBase" placeholder="only if Binance is blocked" spellcheck="false"></label>
+        <p class="hint">CSV columns: time, open, high, low, close, volume.</p>
         <div class="grid3">
-          <label>CSV market
+          <label>Market
             <select id="csvMarket"><option value="futures">Futures</option><option value="spot">Spot</option></select>
           </label>
-          <label>Symbol <input id="csvSymbol" value="BTCUSDT"></label>
-          <label>TF
+          <label>Coin <input id="csvSymbol" value="BTCUSDT"></label>
+          <label>Candle
             <select id="csvTf"><option>1m</option><option selected>5m</option><option>15m</option><option>1h</option></select>
           </label>
         </div>
-        <label class="btn sm file">Import CSV<input type="file" id="csvFile" accept=".csv,text/csv,text/plain"></label>
+        <label class="btn sm file">Choose CSV file<input type="file" id="csvFile" accept=".csv,text/csv,text/plain"></label>
       </details>
     </div>
 
     <div class="card">
-      <h2>Saved <span class="hint" id="storageInfo"></span></h2>
+      <h2>2 · Your data <span class="hint" id="storageInfo"></span></h2>
+      <p class="hint">Backtests run on the one marked <b>In use</b>. Tap another to switch.</p>
       <div id="dsList" class="list"></div>
     </div>
   </section>
