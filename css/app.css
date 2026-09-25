@@ -91,7 +91,10 @@ label.inline select { width: auto; }
 .more { margin-top: 8px; }
 .more summary { cursor: pointer; color: var(--muted); font-size: 13px; padding: 6px 0; }
 /* dữ liệu đã lưu: một dòng mỗi bộ, chạm để dùng */
-.ds { display: flex; align-items: center; border-top: 1px solid var(--line); }
+.ds { display: grid; border-top: 1px solid var(--line); padding-bottom: 8px; }
+.ds-acts { display: flex; gap: 6px; padding: 0 12px; }
+.ds-acts .btn { flex: 1; }
+.ds-main .pill { margin-left: 4px; padding: 2px 8px; font-size: 11px; vertical-align: 1px; }
 .ds:first-child { border-top: 0; }
 .ds-main { flex: 1; min-width: 0; text-align: left; font: inherit; color: var(--text); background: none; border: 0;
   padding: 8px 0 8px 12px; cursor: pointer; display: grid; border-left: 3px solid transparent; }

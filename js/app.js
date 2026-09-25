@@ -87,37 +87,46 @@ function hideTabbarWithKeyboard() {
 }
 
 // ============================================================== data
+// giải thích khung nến: nến nhỏ = biết giá đi lên hay xuống trước trong nến giao dịch → thoát lệnh chính xác hơn
+const TF_HELP = {
+  "1m": "Best for trailing stops: exits are checked minute by minute. Big download — about 6 months takes a few minutes.",
+  "5m": "Good balance: can backtest 5m and larger (15m, 1h, 4h…); exits are checked on every 5m candle.",
+  "15m": "Stops and trailing are checked only once per 15m candle, so tight trailing (under ~0.5R) looks better than it really is.",
+  "1h": "Only for 1h+ strategies; stops and trailing are checked once per hour, so results are rough.",
+};
 function dlHint() {
   const tf = $("#dlTf").value, from = Date.parse($("#dlFrom").value) || Date.now();
   const n = Math.max(0, (Date.now() - from) / TF_MS[tf]);
   const reqs = Math.ceil(n / 1000);
   const mb = (n * 6 * 8) / 1e6;
   const secs = reqs * 0.14;
-  $("#dlHint").textContent = `~${fmtInt(n)} candles · ${secs < 90 ? `${Math.ceil(secs)} s` : `${fmt(secs / 60, 1)} min`} · ${fmt(mb, 0)} MB`
-    + (tf === "1m" && n > 300000 ? " · 1m: keep it under ~6 months" : "");
+  $("#tfHelp").textContent = TF_HELP[tf] || "";
+  $("#dlHint").textContent = `About ${fmtInt(n)} candles · takes ~${secs < 90 ? `${Math.ceil(secs)} s` : `${fmt(secs / 60, 1)} min`} · uses ${fmt(mb, 0)} MB`;
 }
 
 async function refreshDatasets() {
   const list = (await Data.listDatasets()).sort((a, b) => a.id.localeCompare(b.id));
   const box = $("#dsList");
-  if (!list.length) { box.innerHTML = `<p class="hint">Nothing yet.</p>`; }
+  if (!list.length) { box.innerHTML = `<p class="hint">No data yet — choose a candle size above and tap Download.</p>`; }
   else {
     box.innerHTML = list.map((m) => {
       const on = m.id === state.activeId;
       return `<div class="ds ${on ? "active" : ""}" data-id="${esc(m.id)}">
         <button class="ds-main" data-act="use" type="button" aria-pressed="${on}">
-          <b>${esc(m.symbol)} ${esc(m.tf)} <span class="tag">${m.market === "futures" ? "F" : "S"}</span></b>
-          <span class="hint">${day(m.first)} → ${day(m.last)} · ${fmtInt(m.count)}</span>
+          <b>${esc(m.symbol)} · ${esc(m.tf)} candles · ${m.market === "futures" ? "Futures" : "Spot"} ${on ? `<span class="pill good">In use</span>` : ""}</b>
+          <span class="hint">${day(m.first)} → ${day(m.last)} · ${fmtInt(m.count)} candles</span>
         </button>
-        <button class="icon" data-act="update" type="button" aria-label="Update" title="Update">↻</button>
-        <button class="icon" data-act="csv" type="button" aria-label="Export CSV" title="Export CSV">⤓</button>
-        <button class="icon danger" data-act="del" type="button" aria-label="Delete" title="Delete">✕</button>
+        <div class="ds-acts">
+          <button class="btn sm" data-act="update" type="button" title="Download candles newer than the last one">Update</button>
+          <button class="btn sm" data-act="csv" type="button" title="Save as a CSV file">CSV</button>
+          <button class="btn sm danger" data-act="del" type="button" aria-label="Delete ${esc(m.id)}">Delete</button>
+        </div>
       </div>`;
     }).join("");
   }
   if (navigator.storage?.estimate) {
     const e = await navigator.storage.estimate();
-    $("#storageInfo").textContent = `${fmt((e.usage || 0) / 1e6, 1)} MB`;
+    $("#storageInfo").textContent = `${fmt((e.usage || 0) / 1e6, 1)} MB used`;
   }
   if (!list.find((m) => m.id === state.activeId) && list.length) await useDataset(list[0].id);
   else if (!list.length) { state.activeId = null; state.dataset = null; updateDsLabel(); }
@@ -320,8 +329,10 @@ function renderResult(r, ms) {
   const s = state.strategy, P = r.periods, A = P[0];
   $("#resMeta").textContent = `${s.name} · ${s.tradeTf}${r.detailTf ? ` · exits on ${r.detailTf}` : ""} · ${fmtInt(r.candles)} bars · ${fmt(ms / 1000, 1)} s`;
   const ex = s.exit || {};
-  $("#resWarn").textContent = !r.detailTf && ex.trailStartR > 0 && ex.trailDistR < 0.3
-    ? `Trail gap ${ex.trailDistR}R on ${s.tradeTf} bars only is optimistic. Use smaller-TF data (e.g. 1m) for accurate exits.` : "";
+  // trailing sát (< 0.5R) được lợi ảo khi không biết giá trong nến đi lên hay xuống trước.
+  // Đo trên BTC 15m 2021–2026, gap 0.2R: chỉ nến 15m +110%, chi tiết 5m +88%, chi tiết 1m +77%.
+  $("#resWarn").textContent = ex.trailStartR > 0 && ex.trailDistR < 0.5 && r.detailTf !== "1m"
+    ? `Trail gap ${ex.trailDistR}R: results with ${r.detailTf || s.tradeTf} candles look better than reality. Download 1m data for accurate trailing exits.` : "";
   const my = (t) => { const d = new Date(t); return `${String(d.getUTCMonth() + 1).padStart(2, "0")}/${String(d.getUTCFullYear()).slice(2)}`; };
 
   // tiêu đề: lãi/lỗ tổng + so với mua & giữ
@@ -422,7 +433,7 @@ async function init() {
   $("#btnTest").addEventListener("click", async () => {
     try {
       const r = await Data.testConnection($("#dlMarket").value, $("#apiBase").value.trim() || undefined);
-      toast(r.ok ? `Binance OK · ${r.via} · ${r.ms} ms` : "Binance returned no data.", r.ok ? "ok" : "warn");
+      toast(r.ok ? `Binance reachable (${r.via}, ${r.ms} ms) — Download should work.` : "Binance returned no data.", r.ok ? "ok" : "warn");
     } catch (e) {
       toast(`Can't reach Binance: ${e.message}. Try a proxy or CSV (Advanced).`, "err");
     }
