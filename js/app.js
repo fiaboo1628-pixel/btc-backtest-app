@@ -8,6 +8,10 @@ import { DEFAULT_EXIT, DEFAULT_ACCOUNT } from "./engine.js";
 // thống kê truy cập (Vercel Analytics): tải không bắt buộc — lỗi/offline thì bỏ qua, app vẫn chạy
 import("@vercel/analytics").then((m) => m.inject()).catch(() => {});
 
+// Initialize Vercel Speed Insights
+// theo dõi hiệu suất (Speed Insights): tải không bắt buộc — lỗi/offline thì bỏ qua, app vẫn chạy
+import("@vercel/speed-insights").then((m) => m.injectSpeedInsights()).catch(() => {});
+
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const fmt = (n, d = 2) => (n == null || !Number.isFinite(n)) ? "–" : n.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
