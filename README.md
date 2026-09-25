@@ -84,6 +84,9 @@ Repo này gom toàn bộ dự án. Trước đây bot nằm ở repo `bot_trade`
 - **ML lọc lệnh (meta-labeling) không giúp** (`bot/research/meta_label.py`, walk-forward ngoài mẫu 2022 → 2026):
   gốc +55% DD 14.6%; LightGBM giữ 70% +47% DD 12.4%, không hơn lọc ngẫu nhiên có ý nghĩa.
   Nới điều kiện vào lệnh để có nhiều lệnh hơn: −53%, ML lọc lại chỉ về +4%. → giữ nguyên bộ lọc hiện tại.
+- **Backtest so với live** (`cost-check`, nến 1m): phí taker 0.05% cả 2 chiều (bot vào/ra bằng lệnh market)
+  và trượt giá 0.015–0.03%/chiều kéo lãi 01/2021 → 08/2026 từ +74% xuống khoảng +50–57% (PF 1.29 → 1.20–1.23).
+  App giờ mặc định phí 0.05%. Kỳ vọng live thực tế: khoảng 6–8%/năm, sụt vốn 15–20%.
 - LLM: không dùng để ra lệnh (không backtest trung thực được). Nếu thử thì chỉ làm bộ **chặn lệnh** theo tin
   tức trong `confirm_trade_entry`, kiểm chứng bằng 2 bot dry-run song song vài tháng.
 
@@ -93,6 +96,8 @@ Repo này gom toàn bộ dự án. Trước đây bot nằm ở repo `bot_trade`
 - Repo `bot_trade` giờ là bản trùng, có thể archive.
 
 ### Lưu ý an toàn
+- Stop nằm trên sàn (`stoploss_on_exchange` trong `bot/deploy/config.live.json`, dời theo trailing mỗi 60 s): bot
+  hay máy tắt giữa chừng thì lệnh vẫn có stop.
 - Không bao giờ dán API key vào chat hay commit. Key chỉ nhập qua `docker compose run --rm setup --api`
   (lưu ở `bot/deploy/secrets/`, đã gitignore).
 - Key thật: chỉ bật Futures, **tắt rút tiền**, giới hạn IP. Không dùng key thật trên Codespaces.

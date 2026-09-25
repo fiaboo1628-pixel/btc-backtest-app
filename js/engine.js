@@ -25,7 +25,7 @@ export const DEFAULT_ACCOUNT = {
   wallet: 1000,
   riskPct: 1,          // % vốn rủi ro mỗi lệnh
   maxLev: 5,
-  fee: 0.00035,        // phí mỗi chiều (0.035% = TB maker 0.02% vào + taker 0.05% ra)
+  fee: 0.0005,         // phí mỗi chiều: taker 0.05% (bot vào/ra bằng lệnh market)
   tradableRatio: 0.99, // như tradable_balance_ratio của freqtrade
   amountStep: 0.001,   // bước khối lượng BTCUSDT perpetual
   priceStep: 0.1,      // bước giá

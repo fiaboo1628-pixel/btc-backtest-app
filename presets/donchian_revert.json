@@ -1,6 +1,6 @@
 {
   "name": "DonchianRevert",
-  "description": "BTC 15m mean reversion: price at Donchian(20) extreme, ADX > 30, low volume, ATR ≥ 0.4%.",
+  "description": "BTC 15m mean reversion: price at Donchian(20) extreme, ADX > 30, low volume, ATR ≥ 0.4%. Exits as the bot: stop 3 ATR, trail from 2R at 1R.",
   "tradeTf": "15m",
   "long": [
     {
@@ -89,7 +89,7 @@
   "exit": {
     "rAtr": 3,
     "trailStartR": 2,
-    "trailDistR": 0.5,
+    "trailDistR": 1.0,
     "maxHoldBars": 0
   },
   "account": {

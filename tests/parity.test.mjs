@@ -18,7 +18,8 @@ test("khớp freqtrade từng lệnh (DonchianRevert)", { skip }, () => {
   const k = fx.candles;
   const startIdx = k.t.findIndex((t) => t >= Date.UTC(2021, 0, 1));
   const res = backtest(k, buildSignals(strat, k, k), I.atr(k.h, k.l, k.c, 14),
-    { exit: strat.exit, account: strat.account, funding: fx.funding, startIdx });
+    // thông số đúng như lúc xuất lệnh tham chiếu freqtrade (cfg_fut.json: phí 0.035%, trailing cách đỉnh 0.5R)
+    { exit: { ...strat.exit, trailDistR: 0.5 }, account: { ...strat.account, fee: 0.00035 }, funding: fx.funding, startIdx });
   assert.equal(res.trades.length, ref.length, "số lệnh");
   res.trades.forEach((x, i) => {
     const r = ref[i];
