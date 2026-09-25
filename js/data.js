@@ -208,7 +208,10 @@ export async function download({ market, symbol, tf, from, apiBase, onProgress, 
   const now = Date.now();
   const lastClosed = Math.floor(now / ms) * ms - ms;
   let start = saved ? saved.meta.last + ms : Math.floor(from / ms) * ms;
-  if (saved && from < saved.meta.first) start = Math.floor(from / ms) * ms; // extending into the past → reload
+  if (saved && from < saved.meta.first) {                // extending into the past → reload (cả funding)
+    start = Math.floor(from / ms) * ms;
+    saved = { ...saved, funding: [] };
+  }
   const meta = { id, market, symbol: symbol.toUpperCase(), tf };
   let cols = Object.fromEntries(COLS.map((k) => [k, []]));
   let added = 0;

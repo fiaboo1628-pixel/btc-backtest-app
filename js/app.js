@@ -299,8 +299,12 @@ async function runBacktest() {
   const t0 = performance.now();
   const w = getWorker();
   const res = await new Promise((ok) => {
-    const h = (e) => { if (e.data.id === id) { w.removeEventListener("message", h); ok(e.data); } };
+    const done = (r) => { w.removeEventListener("message", h); w.removeEventListener("error", fail); ok(r); };
+    const h = (e) => { if (e.data.id === id) done(e.data); };
+    // worker chết (hết bộ nhớ, lỗi tải module): báo lỗi thay vì kẹt nút Run, lần sau tạo worker mới
+    const fail = (e) => { e.preventDefault?.(); w.terminate(); worker = null; done({ ok: false, error: `Backtest crashed: ${e.message || "out of memory?"}` }); };
     w.addEventListener("message", h);
+    w.addEventListener("error", fail);
     w.postMessage({ id, source: candles, sourceTf: meta.tf, funding: meta.market === "futures" ? funding : [], strategy: s, split, from, to });
   });
   btn.disabled = false; label.textContent = "Run";

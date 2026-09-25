@@ -20,6 +20,7 @@ self.onmessage = (e) => {
     const a = atr(base.h, base.l, base.c, 14);
     const idx = (t) => { let i = 0; while (i < base.t.length && base.t[i] < t) i++; return i; };
     const s0 = Math.max(1, idx(from ?? base.t[0])), s1 = to ? idx(to) : base.t.length;
+    if (s1 - s0 < 2) throw new Error("No data in the selected From/To range.");
     const run = (start, end, trace = false) => {
       const res = backtest(base, sig, a, { exit: strategy.exit, account: strategy.account, funding, startIdx: start, endIdx: end, trace,
         ...(detail ? { detail: source, detailMs: TF_MS[strategy.tradeTf] } : {}) });
