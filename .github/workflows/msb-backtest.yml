@@ -1,0 +1,40 @@
+# Backtest chỉ báo MSB-OB trên dữ liệu BTCUSDT Futures thật (data.binance.vision), bằng bộ máy của app.
+# Kết quả: tab Summary của lần chạy + artifact msb-backtest.
+name: msb-backtest
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["claude/**"]
+    paths: ["tools/backtest_cli.mjs", "tools/msb_variants.json", "js/**", ".github/workflows/msb-backtest.yml"]
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Tải nến 5m + funding BTCUSDT (2021-01 → tháng trước)
+        run: |
+          mkdir -p data && cd data
+          END=$(date -u -d "$(date -u +%Y-%m-01) -1 month" +%Y-%m)
+          m=2021-01
+          while [[ "$m" < "$END" || "$m" == "$END" ]]; do
+            B=https://data.binance.vision/data/futures/um/monthly
+            curl -sfLO "$B/klines/BTCUSDT/5m/BTCUSDT-5m-$m.zip" || echo "thiếu nến $m"
+            curl -sfLO "$B/fundingRate/BTCUSDT/BTCUSDT-fundingRate-$m.zip" || echo "thiếu funding $m"
+            m=$(date -u -d "$m-01 +1 month" +%Y-%m)
+          done
+          for z in *.zip; do unzip -qo "$z"; done
+          cat BTCUSDT-5m-*.csv > klines.csv
+          cat BTCUSDT-fundingRate-*.csv > funding.csv
+          wc -l klines.csv funding.csv
+      - name: Backtest
+        run: node tools/backtest_cli.mjs data/klines.csv data/funding.csv --from 2021-01-01 --split 2025-01-01 | tee msb-backtest.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: msb-backtest
+          path: msb-backtest.md

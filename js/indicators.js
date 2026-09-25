@@ -233,3 +233,82 @@ export function roc(c, n) {
   for (let i = n; i < c.length; i++) out[i] = (c[i] / c[i - n] - 1) * 100;
   return out;
 }
+
+/**
+ * Market Structure Break & Order Block (EmreKb, TradingView "MSB-OB"), chuyển từng bước từ Pine v5.
+ * Chỉ dùng nến đã đóng tới i (không nhìn trước). Trả:
+ *  - market: 1 = cấu trúc tăng, -1 = giảm (NaN cho tới MSB đầu tiên)
+ *  - buPos / bePos: vị trí giá đóng cửa trong vùng Bu-OB / Be-OB mới nhất (0 = đáy hộp, 1 = đỉnh hộp);
+ *    NaN khi chưa có hộp hoặc hộp đã bị phá (Bu-OB: đóng cửa dưới đáy; Be-OB: đóng cửa trên đỉnh)
+ * Khác bản gốc: chỉ theo dõi hộp mới nhất mỗi loại (bản gốc giữ nhiều hộp để vẽ).
+ */
+export function msbOb(o, h, l, c, len = 9, fib = 0.33) {
+  const n = c.length;
+  const market = nanArray(n), buPos = nanArray(n), bePos = nanArray(n);
+  // mảng đỉnh/đáy zigzag (Pine khởi tạo bằng na)
+  const hp = [NaN, NaN], hix = [NaN, NaN], lp = [NaN, NaN], lix = [NaN, NaN];
+  const l0iHist = new Float64Array(n), h0iHist = new Float64Array(n);
+  let trend = 1, mkt = 1, seen = false;
+  let lastUp = -1, lastDown = -1;           // nến gần nhất có to_up / to_down
+  let runLow = NaN, runHigh = NaN;          // ta.lowest/ta.highest trên cửa sổ động
+  let lowEq = -1, highEq = -1;              // ta.barssince(low_val == low) / (high_val == high)
+  let buIdx = 0, beIdx = 0, buKey = "", beKey = "";
+  let buBox = null, beBox = null;
+  const last = (a, k) => a[a.length - 1 - k];
+  // for i = a to b của Pine (đếm lùi khi a > b); giữ chỉ số cuối cùng thoả điều kiện
+  const scan = (a, b, want, prev) => {
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return prev;
+    const d = a <= b ? 1 : -1;
+    for (let k = a; d > 0 ? k <= b : k >= b; k += d) if (want(k)) prev = k;
+    return prev;
+  };
+
+  for (let i = 0; i < n; i++) {
+    let hh = -Infinity, ll = Infinity;
+    if (i >= len - 1) for (let k = i - len + 1; k <= i; k++) { if (h[k] > hh) hh = h[k]; if (l[k] < ll) ll = l[k]; }
+    const toUp = i >= len - 1 && h[i] >= hh, toDown = i >= len - 1 && l[i] <= ll;
+
+    // low_val = ta.lowest(max(ta.barssince(to_up[1]), 1)) → cửa sổ bắt đầu ở lastUp + 2
+    if (lastUp < 0 || i <= lastUp + 1) runLow = l[i];
+    else runLow = i === lastUp + 2 ? l[i] : Math.min(runLow, l[i]);
+    if (lastDown < 0 || i <= lastDown + 1) runHigh = h[i];
+    else runHigh = i === lastDown + 2 ? h[i] : Math.max(runHigh, h[i]);
+    if (runLow === l[i]) lowEq = i;
+    if (runHigh === h[i]) highEq = i;
+    if (toUp) lastUp = i;
+    if (toDown) lastDown = i;
+
+    const prevTrend = trend;
+    trend = trend === 1 && toDown ? -1 : trend === -1 && toUp ? 1 : trend;
+    if (i > 0 && trend !== prevTrend) {
+      if (trend === 1) { lp.push(runLow); lix.push(lowEq); }
+      else { hp.push(runHigh); hix.push(highEq); }
+    }
+    const h0 = last(hp, 0), h0i = last(hix, 0), h1 = last(hp, 1), h1i = last(hix, 1);
+    const l0 = last(lp, 0), l0i = last(lix, 0), l1 = last(lp, 1), l1i = last(lix, 1);
+    l0iHist[i] = l0i; h0iHist[i] = h0i;
+
+    // bộ chặn valuewhen(ta.change(market) != 0) của bản gốc luôn na (market chưa gán lại khi gọi) → bỏ
+    const prevMkt = mkt;
+    mkt = mkt === 1 && l0 < l1 && l0 < l1 - Math.abs(h0 - l1) * fib ? -1
+      : mkt === -1 && h0 > h1 && h0 > h1 + Math.abs(h1 - l0) * fib ? 1 : mkt;
+
+    // nến Order Block: nến giảm cuối cùng trong [h1i, l0i[len]] / nến tăng cuối cùng trong [l1i, h0i[len]]
+    const l0iLag = i >= len ? l0iHist[i - len] : NaN, h0iLag = i >= len ? h0iHist[i - len] : NaN;
+    if (i === 0) { buIdx = 0; beIdx = 0; }
+    const bk = `${h1i}|${l0iLag}`, ek = `${l1i}|${h0iLag}`;
+    if (bk !== buKey) { buIdx = scan(h1i, l0iLag, (k) => o[k] > c[k], buIdx); buKey = bk; }
+    if (ek !== beKey) { beIdx = scan(l1i, h0iLag, (k) => o[k] < c[k], beIdx); beKey = ek; }
+
+    if (mkt !== prevMkt) {
+      seen = true;
+      if (mkt === 1) buBox = { top: h[buIdx], bottom: l[buIdx] };
+      else beBox = { top: h[beIdx], bottom: l[beIdx] };
+    }
+    if (seen) market[i] = mkt;
+    const pos = (b) => (c[i] - b.bottom) / Math.max(b.top - b.bottom, 1e-12);
+    if (buBox) { buPos[i] = pos(buBox); if (c[i] < buBox.bottom) buBox = null; }
+    if (beBox) { bePos[i] = pos(beBox); if (c[i] > beBox.top) beBox = null; }
+  }
+  return { market, buPos, bePos };
+}

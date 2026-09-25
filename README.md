@@ -7,9 +7,9 @@ Backtest chiến lược crypto ngay trên trình duyệt, không cần server:
 - **Nhiều khung thời gian**: tải một khung gốc (1m / 5m / 15m / 1h), các khung lớn hơn
   (15m, 30m, 1h, 2h, 4h, 1d) được ghép tự động. Một điều kiện có thể dùng khung lớn hơn khung giao dịch
   (ví dụ vào lệnh 15m, lọc bằng ADX nến 1h) — chỉ dùng nến khung lớn **đã đóng**.
-- **Lắp ghép chiến lược**: 18 chỉ báo (Donchian, Bollinger %B, Williams %R, RSI, Stochastic, CCI, MFI,
+- **Lắp ghép chiến lược**: 21 chỉ báo (Donchian, Bollinger %B, Williams %R, RSI, Stochastic, CCI, MFI,
   ROC, ADX, ±DI, khoảng cách/độ dốc EMA, MACD, ATR %, ATR so với nền, độ rộng Bollinger, biên độ nến,
-  khối lượng). Mỗi điều kiện: `chỉ báo(tham số) [khung] ≤ ≥ < > cắt lên/cắt xuống ngưỡng`,
+  khối lượng, **Market Structure Break & Order Block** — xu hướng MSB, vị trí giá trong vùng Bu-OB/Be-OB). Mỗi điều kiện: `chỉ báo(tham số) [khung] ≤ ≥ < > cắt lên/cắt xuống ngưỡng`,
   các điều kiện nối bằng **VÀ**, Long và Short riêng.
 - **Thoát lệnh theo R**: 1R = k × ATR(14) nến tín hiệu; lãi chạm mốc thì stoploss bám đỉnh/đáy;
   giới hạn thời gian giữ lệnh. Khối lượng theo % vốn rủi ro, có trần đòn bẩy; phí + funding thật.

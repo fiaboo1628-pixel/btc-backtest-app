@@ -1,0 +1,786 @@
+[
+ {
+  "name": "0. DonchianRevert (đối chứng)",
+  "description": "BTC 15m mean reversion: price at Donchian(20) extreme, ADX > 30, low volume, ATR ≥ 0.4%.",
+  "tradeTf": "15m",
+  "long": [
+   {
+    "ind": "dpos",
+    "params": {
+     "n": 20
+    },
+    "op": "<=",
+    "value": 0.074
+   },
+   {
+    "ind": "adx",
+    "params": {
+     "n": 14
+    },
+    "op": ">",
+    "value": 30
+   },
+   {
+    "ind": "vol_ratio",
+    "params": {
+     "n": 96
+    },
+    "op": "<",
+    "value": 1.0
+   },
+   {
+    "ind": "vol_ratio",
+    "params": {
+     "n": 96
+    },
+    "op": ">",
+    "value": 0
+   },
+   {
+    "ind": "atr_pct",
+    "params": {
+     "n": 14
+    },
+    "op": ">=",
+    "value": 0.4
+   }
+  ],
+  "short": [
+   {
+    "ind": "dpos",
+    "params": {
+     "n": 20
+    },
+    "op": ">=",
+    "value": 0.944
+   },
+   {
+    "ind": "adx",
+    "params": {
+     "n": 14
+    },
+    "op": ">",
+    "value": 30
+   },
+   {
+    "ind": "vol_ratio",
+    "params": {
+     "n": 96
+    },
+    "op": "<",
+    "value": 1.0
+   },
+   {
+    "ind": "vol_ratio",
+    "params": {
+     "n": 96
+    },
+    "op": ">",
+    "value": 0
+   },
+   {
+    "ind": "atr_pct",
+    "params": {
+     "n": 14
+    },
+    "op": ">=",
+    "value": 0.4
+   }
+  ],
+  "exit": {
+   "rAtr": 3,
+   "trailStartR": 2,
+   "trailDistR": 0.5,
+   "maxHoldBars": 0
+  },
+  "account": {
+   "riskPct": 1,
+   "maxLev": 5
+  }
+ },
+ {
+  "name": "1. OB retest (mẫu)",
+  "tradeTf": "15m",
+  "long": [
+   {
+    "ind": "msb_trend",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": ">=",
+    "value": 1
+   },
+   {
+    "ind": "msb_buob",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": ">=",
+    "value": 0
+   },
+   {
+    "ind": "msb_buob",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": "<=",
+    "value": 1
+   }
+  ],
+  "short": [
+   {
+    "ind": "msb_trend",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": "<=",
+    "value": -1
+   },
+   {
+    "ind": "msb_beob",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": "<=",
+    "value": 1
+   },
+   {
+    "ind": "msb_beob",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": ">=",
+    "value": 0
+   }
+  ],
+  "exit": {
+   "rAtr": 2,
+   "trailStartR": 2,
+   "trailDistR": 0.5,
+   "tpR": 3,
+   "maxHoldBars": 0
+  },
+  "account": {
+   "riskPct": 1,
+   "maxLev": 5
+  }
+ },
+ {
+  "name": "2. OB retest + lọc 1h",
+  "tradeTf": "15m",
+  "long": [
+   {
+    "ind": "msb_trend",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": ">=",
+    "value": 1
+   },
+   {
+    "ind": "msb_buob",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": ">=",
+    "value": 0
+   },
+   {
+    "ind": "msb_buob",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": "<=",
+    "value": 1
+   },
+   {
+    "ind": "msb_trend",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": ">=",
+    "value": 1,
+    "tf": "1h"
+   }
+  ],
+  "short": [
+   {
+    "ind": "msb_trend",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": "<=",
+    "value": -1
+   },
+   {
+    "ind": "msb_beob",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": "<=",
+    "value": 1
+   },
+   {
+    "ind": "msb_beob",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": ">=",
+    "value": 0
+   },
+   {
+    "ind": "msb_trend",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": "<=",
+    "value": -1,
+    "tf": "1h"
+   }
+  ],
+  "exit": {
+   "rAtr": 2,
+   "trailStartR": 2,
+   "trailDistR": 0.5,
+   "tpR": 3,
+   "maxHoldBars": 0
+  },
+  "account": {
+   "riskPct": 1,
+   "maxLev": 5
+  }
+ },
+ {
+  "name": "3. OB retest + lọc 4h",
+  "tradeTf": "15m",
+  "long": [
+   {
+    "ind": "msb_trend",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": ">=",
+    "value": 1
+   },
+   {
+    "ind": "msb_buob",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": ">=",
+    "value": 0
+   },
+   {
+    "ind": "msb_buob",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": "<=",
+    "value": 1
+   },
+   {
+    "ind": "msb_trend",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": ">=",
+    "value": 1,
+    "tf": "4h"
+   }
+  ],
+  "short": [
+   {
+    "ind": "msb_trend",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": "<=",
+    "value": -1
+   },
+   {
+    "ind": "msb_beob",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": "<=",
+    "value": 1
+   },
+   {
+    "ind": "msb_beob",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": ">=",
+    "value": 0
+   },
+   {
+    "ind": "msb_trend",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": "<=",
+    "value": -1,
+    "tf": "4h"
+   }
+  ],
+  "exit": {
+   "rAtr": 2,
+   "trailStartR": 2,
+   "trailDistR": 0.5,
+   "tpR": 3,
+   "maxHoldBars": 0
+  },
+  "account": {
+   "riskPct": 1,
+   "maxLev": 5
+  }
+ },
+ {
+  "name": "4. OB retest nửa hộp + lọc 1h",
+  "tradeTf": "15m",
+  "long": [
+   {
+    "ind": "msb_trend",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": ">=",
+    "value": 1
+   },
+   {
+    "ind": "msb_buob",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": ">=",
+    "value": 0
+   },
+   {
+    "ind": "msb_buob",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": "<=",
+    "value": 0.5
+   },
+   {
+    "ind": "msb_trend",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": ">=",
+    "value": 1,
+    "tf": "1h"
+   }
+  ],
+  "short": [
+   {
+    "ind": "msb_trend",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": "<=",
+    "value": -1
+   },
+   {
+    "ind": "msb_beob",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": "<=",
+    "value": 1
+   },
+   {
+    "ind": "msb_beob",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": ">=",
+    "value": 0.5
+   },
+   {
+    "ind": "msb_trend",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": "<=",
+    "value": -1,
+    "tf": "1h"
+   }
+  ],
+  "exit": {
+   "rAtr": 2,
+   "trailStartR": 2,
+   "trailDistR": 0.5,
+   "tpR": 3,
+   "maxHoldBars": 0
+  },
+  "account": {
+   "riskPct": 1,
+   "maxLev": 5
+  }
+ },
+ {
+  "name": "5. OB retest ZigZag 14 + lọc 1h",
+  "tradeTf": "15m",
+  "long": [
+   {
+    "ind": "msb_trend",
+    "params": {
+     "n": 14,
+     "f": 0.33
+    },
+    "op": ">=",
+    "value": 1
+   },
+   {
+    "ind": "msb_buob",
+    "params": {
+     "n": 14,
+     "f": 0.33
+    },
+    "op": ">=",
+    "value": 0
+   },
+   {
+    "ind": "msb_buob",
+    "params": {
+     "n": 14,
+     "f": 0.33
+    },
+    "op": "<=",
+    "value": 1
+   },
+   {
+    "ind": "msb_trend",
+    "params": {
+     "n": 14,
+     "f": 0.33
+    },
+    "op": ">=",
+    "value": 1,
+    "tf": "1h"
+   }
+  ],
+  "short": [
+   {
+    "ind": "msb_trend",
+    "params": {
+     "n": 14,
+     "f": 0.33
+    },
+    "op": "<=",
+    "value": -1
+   },
+   {
+    "ind": "msb_beob",
+    "params": {
+     "n": 14,
+     "f": 0.33
+    },
+    "op": "<=",
+    "value": 1
+   },
+   {
+    "ind": "msb_beob",
+    "params": {
+     "n": 14,
+     "f": 0.33
+    },
+    "op": ">=",
+    "value": 0
+   },
+   {
+    "ind": "msb_trend",
+    "params": {
+     "n": 14,
+     "f": 0.33
+    },
+    "op": "<=",
+    "value": -1,
+    "tf": "1h"
+   }
+  ],
+  "exit": {
+   "rAtr": 2,
+   "trailStartR": 2,
+   "trailDistR": 0.5,
+   "tpR": 3,
+   "maxHoldBars": 0
+  },
+  "account": {
+   "riskPct": 1,
+   "maxLev": 5
+  }
+ },
+ {
+  "name": "6. OB retest ZigZag 21 + lọc 1h",
+  "tradeTf": "15m",
+  "long": [
+   {
+    "ind": "msb_trend",
+    "params": {
+     "n": 21,
+     "f": 0.33
+    },
+    "op": ">=",
+    "value": 1
+   },
+   {
+    "ind": "msb_buob",
+    "params": {
+     "n": 21,
+     "f": 0.33
+    },
+    "op": ">=",
+    "value": 0
+   },
+   {
+    "ind": "msb_buob",
+    "params": {
+     "n": 21,
+     "f": 0.33
+    },
+    "op": "<=",
+    "value": 1
+   },
+   {
+    "ind": "msb_trend",
+    "params": {
+     "n": 21,
+     "f": 0.33
+    },
+    "op": ">=",
+    "value": 1,
+    "tf": "1h"
+   }
+  ],
+  "short": [
+   {
+    "ind": "msb_trend",
+    "params": {
+     "n": 21,
+     "f": 0.33
+    },
+    "op": "<=",
+    "value": -1
+   },
+   {
+    "ind": "msb_beob",
+    "params": {
+     "n": 21,
+     "f": 0.33
+    },
+    "op": "<=",
+    "value": 1
+   },
+   {
+    "ind": "msb_beob",
+    "params": {
+     "n": 21,
+     "f": 0.33
+    },
+    "op": ">=",
+    "value": 0
+   },
+   {
+    "ind": "msb_trend",
+    "params": {
+     "n": 21,
+     "f": 0.33
+    },
+    "op": "<=",
+    "value": -1,
+    "tf": "1h"
+   }
+  ],
+  "exit": {
+   "rAtr": 2,
+   "trailStartR": 2,
+   "trailDistR": 0.5,
+   "tpR": 3,
+   "maxHoldBars": 0
+  },
+  "account": {
+   "riskPct": 1,
+   "maxLev": 5
+  }
+ },
+ {
+  "name": "7. Phá cấu trúc (cross)",
+  "tradeTf": "15m",
+  "long": [
+   {
+    "ind": "msb_trend",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": "crossAbove",
+    "value": 0
+   }
+  ],
+  "short": [
+   {
+    "ind": "msb_trend",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": "crossBelow",
+    "value": 0
+   }
+  ],
+  "exit": {
+   "rAtr": 2,
+   "trailStartR": 2,
+   "trailDistR": 0.5,
+   "tpR": 3,
+   "maxHoldBars": 0
+  },
+  "account": {
+   "riskPct": 1,
+   "maxLev": 5
+  }
+ },
+ {
+  "name": "8. Phá cấu trúc + ADX>25",
+  "tradeTf": "15m",
+  "long": [
+   {
+    "ind": "msb_trend",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": "crossAbove",
+    "value": 0
+   },
+   {
+    "ind": "adx",
+    "params": {
+     "n": 14
+    },
+    "op": ">",
+    "value": 25
+   }
+  ],
+  "short": [
+   {
+    "ind": "msb_trend",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": "crossBelow",
+    "value": 0
+   },
+   {
+    "ind": "adx",
+    "params": {
+     "n": 14
+    },
+    "op": ">",
+    "value": 25
+   }
+  ],
+  "exit": {
+   "rAtr": 2,
+   "trailStartR": 2,
+   "trailDistR": 0.5,
+   "tpR": 3,
+   "maxHoldBars": 0
+  },
+  "account": {
+   "riskPct": 1,
+   "maxLev": 5
+  }
+ },
+ {
+  "name": "9. Phá cấu trúc + lọc 4h",
+  "tradeTf": "15m",
+  "long": [
+   {
+    "ind": "msb_trend",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": "crossAbove",
+    "value": 0
+   },
+   {
+    "ind": "msb_trend",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": ">=",
+    "value": 1,
+    "tf": "4h"
+   }
+  ],
+  "short": [
+   {
+    "ind": "msb_trend",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": "crossBelow",
+    "value": 0
+   },
+   {
+    "ind": "msb_trend",
+    "params": {
+     "n": 9,
+     "f": 0.33
+    },
+    "op": "<=",
+    "value": -1,
+    "tf": "4h"
+   }
+  ],
+  "exit": {
+   "rAtr": 2,
+   "trailStartR": 2,
+   "trailDistR": 0.5,
+   "tpR": 3,
+   "maxHoldBars": 0
+  },
+  "account": {
+   "riskPct": 1,
+   "maxLev": 5
+  }
+ }
+]

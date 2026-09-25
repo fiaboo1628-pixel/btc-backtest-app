@@ -101,6 +101,24 @@ export const CATALOG = [
     calc: (k) => { const a = I.atr(k.h, k.l, k.c, 14); return Float64Array.from(k.c, (x, i) => (i > 0 ? (x - k.c[i - 1]) / a[i - 1] : NaN)); },
   },
   {
+    id: "msb_trend", group: "Structure", label: "MSB trend",
+    help: "Market Structure Break (MSB-OB): 1 = bullish structure, -1 = bearish. Crosses = the MSB bar", range: [-1, 1, 1],
+    params: [P("n", "ZigZag", 9, 2, 50), P("f", "Fib factor", 0.33, 0, 1, 0.01)],
+    calc: (k, p) => I.msbOb(k.o, k.h, k.l, k.c, p.n, p.f).market,
+  },
+  {
+    id: "msb_buob", group: "Structure", label: "Bu-OB position",
+    help: "Close inside the latest bullish order block: 0 = box low, 1 = box high. Empty once broken", range: [-0.5, 3, 0.01],
+    params: [P("n", "ZigZag", 9, 2, 50), P("f", "Fib factor", 0.33, 0, 1, 0.01)],
+    calc: (k, p) => I.msbOb(k.o, k.h, k.l, k.c, p.n, p.f).buPos,
+  },
+  {
+    id: "msb_beob", group: "Structure", label: "Be-OB position",
+    help: "Close inside the latest bearish order block: 0 = box low, 1 = box high. Empty once broken", range: [-2, 1.5, 0.01],
+    params: [P("n", "ZigZag", 9, 2, 50), P("f", "Fib factor", 0.33, 0, 1, 0.01)],
+    calc: (k, p) => I.msbOb(k.o, k.h, k.l, k.c, p.n, p.f).bePos,
+  },
+  {
     id: "vol_ratio", group: "Volume", label: "Volume ratio",
     help: "Volume / N-bar mean (incl. current bar)", range: [0, 5, 0.01],
     params: [P("n", "Bars", 96, 10, 500)],

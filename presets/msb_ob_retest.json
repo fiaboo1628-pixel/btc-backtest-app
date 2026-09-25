@@ -1,0 +1,17 @@
+{
+  "name": "MSB OB retest",
+  "description": "Market Structure Break & Order Block: after a bullish MSB, buy when price pulls back into the Bu-OB box (short: mirror).",
+  "tradeTf": "15m",
+  "long": [
+    { "ind": "msb_trend", "params": { "n": 9, "f": 0.33 }, "op": ">=", "value": 1 },
+    { "ind": "msb_buob", "params": { "n": 9, "f": 0.33 }, "op": ">=", "value": 0 },
+    { "ind": "msb_buob", "params": { "n": 9, "f": 0.33 }, "op": "<=", "value": 1 }
+  ],
+  "short": [
+    { "ind": "msb_trend", "params": { "n": 9, "f": 0.33 }, "op": "<=", "value": -1 },
+    { "ind": "msb_beob", "params": { "n": 9, "f": 0.33 }, "op": ">=", "value": 0 },
+    { "ind": "msb_beob", "params": { "n": 9, "f": 0.33 }, "op": "<=", "value": 1 }
+  ],
+  "exit": { "rAtr": 2, "trailStartR": 2, "trailDistR": 0.5, "tpR": 3, "maxHoldBars": 0 },
+  "account": { "riskPct": 1, "maxLev": 5 }
+}
