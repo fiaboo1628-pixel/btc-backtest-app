@@ -77,6 +77,16 @@ cho quen, khi muốn lên tiền thật chỉ cần nhập lại key thật.
    - Mỗi loại tài khoản có lịch sử lệnh riêng: `user_data/demo.sqlite`, `user_data/real.sqlite`.
 4. Quay về dry-run: `docker compose run --rm setup --dryrun` rồi `docker compose up -d`.
 
+### Kiểm tra tự động (1 lệnh, ~30 giây)
+Sau khi nhập key Demo, chạy thử cả chuỗi đặt lệnh bằng đúng code của bot — vào lệnh ~110 USDT, đặt stop trên sàn,
+dời stop, đóng lệnh, dọn sạch:
+```bash
+docker compose stop live          # tạm dừng bot để không đụng lệnh thử
+docker compose run --rm check     # in BÁO CÁO cuối cùng: dán phần đó khi cần hỗ trợ (không chứa key)
+docker compose start live
+```
+Chỉ chạy với key Demo (key thật: script từ chối). Mọi bước ✅ thì chạy bot; có ❌ thì gửi báo cáo để sửa.
+
 ### Kiểm tra trên Demo trước khi lên tiền thật
 Lệnh đầu tiên có thể mất vài ngày (trung bình ~6 lệnh/tháng). Khi có lệnh, mở app Binance (tài khoản Demo):
 - [ ] Vị thế mở đúng chiều, khối lượng ≈ rủi ro 1% vốn (lỗ khi chạm stop ban đầu ≈ 1% số dư).
