@@ -118,7 +118,15 @@ Tài khoản miễn phí có khoảng 60 giờ/tháng với máy 2 nhân.
    từ cây thư mục bên trái). File ghi: kết nối Binance OK hay bị chặn, và 2 mật khẩu đăng nhập.
 4. Tab **Ports**: dòng **8080** (FreqUI) hoặc **8090** (Chỉnh tham số) → bấm biểu tượng quả địa cầu.
    Link chỉ tài khoản GitHub của bạn mở được (để Private, đừng đổi sang Public).
-5. Muốn thử lệnh trên Binance Demo: `cd bot/deploy`, `docker compose run --rm setup --api` (chọn `d`) rồi `docker compose up -d`.
+5. **Chạy trên Binance Demo không cần gõ phím** (hợp khi dùng điện thoại): key Demo đặt trong *Codespaces secrets*.
+   - github.com/settings/codespaces → **Codespaces secrets** → **New secret**, tạo 2 secret, chọn repo này ở
+     *Repository access*: `BINANCE_DEMO_KEY` = API Key, `BINANCE_DEMO_SECRET` = Secret Key
+     (tuỳ chọn `BINANCE_DEMO_CAPITAL` = vốn tối đa, USDT).
+   - Tạo codespace mới (hoặc **Stop** rồi mở lại codespace đang có): bot tự chuyển sang Demo, tự chạy kiểm tra
+     đặt lệnh một lần và ghi kết quả vào **`bot/deploy/DEMO_CHECK.md`** — mở file đó, gửi khung báo cáo khi cần hỗ trợ.
+   - Đổi key: sửa secret rồi mở lại codespace (kiểm tra tự chạy lại với key mới). Chỉ dùng cho key **Demo**.
+   - Có bàn phím thì vẫn dùng được cách cũ: `cd bot/deploy`, `docker compose run --rm setup --api` (chọn `d`),
+     `docker compose up -d`.
 6. Xong thì **Stop codespace** (menu ☰ → Codespaces) để không tốn giờ miễn phí. Mở lại thì bot tự bật lại
    ; xoá codespace thì mất dữ liệu và mật khẩu (tạo lại sẽ tự cài lại).
 

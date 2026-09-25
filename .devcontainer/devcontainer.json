@@ -10,7 +10,7 @@
   // Tự cài và bật bot khi tạo; mỗi lần mở lại codespace thì bật lại bot.
   "onCreateCommand": "printf '# Bot đang cài…\\n\\nMở lại file này sau 2–3 phút.\\n' > bot/deploy/BOT_LOGIN.md",
   "postCreateCommand": "bash .devcontainer/start-bot.sh",
-  "postStartCommand": "cd bot/deploy && [ -f secrets/live.json ] && docker compose up -d || true",
+  "postStartCommand": "bash .devcontainer/apply-demo-keys.sh; cd bot/deploy && [ -f secrets/live.json ] && docker compose up -d || true",
   "forwardPorts": [8080, 8090],
   "portsAttributes": {
     "8080": { "label": "FreqUI (bot)", "onAutoForward": "openBrowserOnce" },

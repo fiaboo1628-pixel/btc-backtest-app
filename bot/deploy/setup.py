@@ -13,11 +13,14 @@ Việc làm:
   - --api: cho bot vào lệnh thật trên sàn bằng API key (hỏi Demo hay Thật; key không hiện lên màn hình).
     Demo và tiền thật chạy cùng một cấu hình, chỉ khác bộ key: lên tiền thật = chạy lại --api với key thật.
   - --dryrun: quay về dry-run (lệnh giả trong freqtrade, không cần key)
+  - --demo-from-env: như --api chọn Demo, nhưng key lấy từ BINANCE_DEMO_KEY / BINANCE_DEMO_SECRET
+    (Codespaces secrets — không phải gõ phím)
 Chạy lại an toàn: file đã có thì giữ nguyên, trừ khi thêm --telegram.
 """
 import argparse
 import getpass
 import json
+import os
 import secrets
 import shutil
 import subprocess
@@ -49,8 +52,10 @@ def main() -> None:
     mode = ap.add_mutually_exclusive_group()
     mode.add_argument("--api", action="store_true", help="vào lệnh trên sàn bằng API key (Demo hoặc Thật)")
     mode.add_argument("--dryrun", action="store_true", help="quay về dry-run")
+    mode.add_argument("--demo-from-env", action="store_true",
+                      help="key Demo lấy từ biến môi trường BINANCE_DEMO_KEY / BINANCE_DEMO_SECRET (Codespaces secrets)")
     args = ap.parse_args()
-    if args.api or args.dryrun:
+    if args.api or args.dryrun or args.demo_from_env:
         args.no_download = True
 
     SECRETS.mkdir(exist_ok=True)
@@ -70,6 +75,8 @@ def main() -> None:
 
     if args.api:
         set_api()
+    elif args.demo_from_env:
+        set_demo_from_env()
     elif args.dryrun:
         (DEPLOY / ".env").unlink(missing_ok=True)
         print("Đã chuyển về dry-run. Chạy: docker compose up -d")
@@ -131,11 +138,25 @@ def set_api() -> None:
     secret = getpass.getpass("Secret Key: ").strip()
     if not key or not secret:
         raise SystemExit("Thiếu key/secret, không đổi gì.")
+    cap = input("Vốn tối đa bot được dùng, USDT (Enter = toàn bộ số dư futures): ").strip()
+    write_exchange(kind, key, secret, cap)
+
+
+def set_demo_from_env() -> None:
+    """Không cần gõ phím: key Demo lấy từ Codespaces secrets (hoặc biến môi trường). Chỉ cho Demo."""
+    key = os.environ.get("BINANCE_DEMO_KEY", "").strip()
+    secret = os.environ.get("BINANCE_DEMO_SECRET", "").strip()
+    if not key or not secret:
+        raise SystemExit("Thiếu BINANCE_DEMO_KEY / BINANCE_DEMO_SECRET, không đổi gì.")
+    write_exchange("demo", key, secret, os.environ.get("BINANCE_DEMO_CAPITAL", "").strip())
+
+
+def write_exchange(kind: str, key: str, secret: str, cap: str = "") -> None:
     conf: dict = {"bot_name": f"DonchianRevert-{kind}",
                   "exchange": {"key": key, "secret": secret, "demo_trading": kind == "demo"}}
-    cap = input("Vốn tối đa bot được dùng, USDT (Enter = toàn bộ số dư futures): ").strip()
     if cap:
         conf["available_capital"] = float(cap)
+    SECRETS.mkdir(exist_ok=True)
     write_json(SECRETS / "exchange.json", conf)
     (DEPLOY / ".env").write_text(
         "# Bật bởi setup.py --api; xoá file này (hoặc setup.py --dryrun) để quay về dry-run\n"

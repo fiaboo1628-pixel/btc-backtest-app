@@ -16,13 +16,17 @@ code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 https://fapi.binance
 
 docker compose pull -q
 login=$(docker compose run --rm -T setup --no-download 2>&1 | grep "Đăng nhập")
+bash ../../.devcontainer/apply-demo-keys.sh     # có Codespaces secrets key Demo → bot chạy trên Binance Demo
 docker compose up -d
+mode="dry-run (ví ảo 1000 USDT)"
+grep -q "BOT_DB=demo" .env 2>/dev/null && mode="Binance DEMO (key từ Codespaces secrets)"
 
 {
   echo "# Bot DonchianRevert trên Codespaces"
   echo
   if [ "$code" = "200" ]; then
-    echo "✅ Kết nối Binance: OK. Bot dry-run đang chạy (ví ảo 1000 USDT)."
+    echo "✅ Kết nối Binance: OK. Bot đang chạy: **$mode**."
+    [ -f DEMO_CHECK.md ] && echo "   Kết quả kiểm tra đặt lệnh: mở file **bot/deploy/DEMO_CHECK.md**."
   elif [ "$code" = "451" ] || [ "$code" = "403" ]; then
     echo "❌ Binance chặn máy chủ này (HTTP $code) — codespace đang ở vùng bị chặn (thường là Mỹ)."
     echo "   Xoá codespace này, vào github.com/settings/codespaces → Region → **Southeast Asia**, rồi tạo lại."
