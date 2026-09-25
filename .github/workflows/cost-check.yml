@@ -1,0 +1,48 @@
+# Chi phí thật khi chạy live: phí taker + trượt giá làm lợi nhuận DonchianRevert giảm bao nhiêu? (BTCUSDT 1m thật)
+name: cost-check
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["claude/**"]
+    paths: ["tools/live_cost_variants.json", ".github/workflows/cost-check.yml"]
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      matrix:
+        tf: [1m]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Tải nến ${{ matrix.tf }} + funding BTCUSDT
+        run: |
+          mkdir -p data && cd data
+          END=$(date -u -d "$(date -u +%Y-%m-01) -1 month" +%Y-%m)
+          m=2021-01
+          B=https://data.binance.vision/data/futures/um/monthly
+          while [[ "$m" < "$END" || "$m" == "$END" ]]; do
+            echo "$B/klines/BTCUSDT/${{ matrix.tf }}/BTCUSDT-${{ matrix.tf }}-$m.zip"
+            echo "$B/fundingRate/BTCUSDT/BTCUSDT-fundingRate-$m.zip"
+            m=$(date -u -d "$m-01 +1 month" +%Y-%m)
+          done | xargs -P 8 -n 1 curl -sfLO || true
+          for z in *.zip; do unzip -qo "$z"; done
+          cat BTCUSDT-${{ matrix.tf }}-*.csv > klines.csv
+          cat BTCUSDT-fundingRate-*.csv > funding.csv
+          wc -l klines.csv funding.csv
+      - name: Backtest
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: |
+          {
+            echo "## Nến 15m + chi tiết ${{ matrix.tf }}"
+            node tools/backtest_cli.mjs data/klines.csv data/funding.csv --variants tools/live_cost_variants.json
+            if [ "${{ matrix.tf }}" = 5m ]; then
+              echo; echo "## Chỉ nến 15m (không có nến chi tiết)"
+              node tools/backtest_cli.mjs data/klines.csv data/funding.csv --variants tools/live_cost_variants.json --resample 15m
+            fi
+          } | tee cost.md
