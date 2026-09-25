@@ -11,6 +11,10 @@ Gồm 3 phần, chạy bằng Docker (Windows, Mac, Linux đều được):
 
 Mọi cổng chỉ mở trên `127.0.0.1` của máy. Xem từ điện thoại khi ra ngoài: dùng Tailscale (bước 5).
 
+**Lộ trình khuyên dùng: Binance Demo → tiền thật, cùng một cấu hình, chỉ đổi key** (bước 6).
+Dry-run (mặc định sau bước 4) chỉ để thử cho chạy được khi chưa có key: nó giả lập lệnh bên trong freqtrade,
+không kiểm tra được lệnh stop đặt trên sàn.
+
 ## 1. Cài Docker
 - Windows / Mac: cài **Docker Desktop**, mở lên một lần. Trên Windows, dùng PowerShell cho các lệnh dưới.
 - Linux: cài Docker Engine + plugin compose.
@@ -73,7 +77,28 @@ cho quen, khi muốn lên tiền thật chỉ cần nhập lại key thật.
    - Mỗi loại tài khoản có lịch sử lệnh riêng: `user_data/demo.sqlite`, `user_data/real.sqlite`.
 4. Quay về dry-run: `docker compose run --rm setup --dryrun` rồi `docker compose up -d`.
 
-Trước khi đổi Demo → Thật, **đóng hết vị thế đang mở** của bot demo (FreqUI → Force exit) để không bị bỏ dở.
+### Kiểm tra tự động (1 lệnh, ~30 giây)
+Sau khi nhập key Demo, chạy thử cả chuỗi đặt lệnh bằng đúng code của bot — vào lệnh ~110 USDT, đặt stop trên sàn,
+dời stop, đóng lệnh, dọn sạch:
+```bash
+docker compose stop live          # tạm dừng bot để không đụng lệnh thử
+docker compose run --rm check     # in BÁO CÁO cuối cùng: dán phần đó khi cần hỗ trợ (không chứa key)
+docker compose start live
+```
+Chỉ chạy với key Demo (key thật: script từ chối). Mọi bước ✅ thì chạy bot; có ❌ thì gửi báo cáo để sửa.
+
+### Kiểm tra trên Demo trước khi lên tiền thật
+Lệnh đầu tiên có thể mất vài ngày (trung bình ~6 lệnh/tháng). Khi có lệnh, mở app Binance (tài khoản Demo):
+- [ ] Vị thế mở đúng chiều, khối lượng ≈ rủi ro 1% vốn (lỗ khi chạm stop ban đầu ≈ 1% số dư).
+- [ ] Tab **Lệnh mở (Open Orders)** có lệnh **Stop Market** reduce-only ngay sau khi vào lệnh
+      (stop nằm trên sàn — `stoploss_on_exchange`).
+- [ ] Khi lãi ≥ 2R, lệnh stop được **dời lên** (mỗi ≤ 60 s).
+- [ ] Tắt bot khi đang có lệnh (`docker compose stop live`): lệnh stop **vẫn còn** trên sàn. Bật lại: bot nhận lại vị thế.
+- [ ] Log không có lỗi đặt lệnh: `docker compose logs live | grep -iE "error|exception"`.
+- [ ] Sau 1–2 tháng: backtest trong app đúng khoảng thời gian đó (nến 1m) và so từng lệnh: giờ vào, chiều, giá thoát.
+
+Đạt hết thì lên tiền thật: **đóng hết vị thế đang mở** của bot demo (FreqUI → Force exit), rồi
+`docker compose run --rm setup --api` chọn `t`, đặt vốn tối đa nhỏ, `docker compose up -d`.
 
 Lưu ý: freqtrade **chưa hỗ trợ chính thức** Demo Trading cho Binance; bộ này bật nó bằng tuỳ chọn
 `_ft_has_params` trong `config.exchange.json` (không ảnh hưởng khi dùng key thật). Nếu log báo lỗi lúc khởi
@@ -110,8 +135,8 @@ git pull && docker compose pull && docker compose up -d   # cập nhật code + 
 
 ## Khác gì so với backtest
 - Vào/ra lệnh bằng **lệnh market** ngay khi nến tín hiệu đóng (backtest vào ở giá mở nến sau — gần như nhau).
-- Phí dry-run lấy theo **phí taker thật của Binance (0.05%/chiều)**, cao hơn mức 0.035% dùng khi backtest,
-  nên kết quả sẽ kém backtest một chút. Funding tính theo mức thật.
+- Phí thật là **phí taker 0.05%/chiều** (app backtest đã mặc định mức này). Trượt giá khi stop khớp không có trong
+  backtest: ước tính làm lãi giảm thêm ~15–25% (xem README gốc, mục "Backtest so với live"). Funding tính theo mức thật.
 - Chiến lược trung bình ~6–7 lệnh/tháng: chạy ít nhất 1–2 tháng rồi hẵng đánh giá. Nên so từng lệnh với
   backtest cùng khoảng thời gian (giá vào, SL, lúc kích hoạt trailing) hơn là chỉ nhìn lãi/lỗ.
 
@@ -120,4 +145,4 @@ git pull && docker compose pull && docker compose up -d   # cập nhật code + 
 - Dữ liệu lệnh dry-run nằm ở `../user_data/dryrun.sqlite`; xoá file này để làm lại từ đầu với ví 1000 USDT.
 - Linux báo lỗi quyền ghi: `sudo chown -R 1000:1000 ../user_data .`
 - Mạng chặn Binance (lỗi 451/403 trong log): thử mạng khác hoặc VPN; không dùng máy chủ đặt ở Mỹ.
-- Nên chạy dry-run hoặc Demo ít nhất 1–2 tháng trước khi dùng key thật, và bắt đầu với vốn nhỏ.
+- Nên chạy Demo ít nhất 1–2 tháng (qua hết checklist ở bước 6) trước khi dùng key thật, và bắt đầu với vốn nhỏ.

@@ -91,7 +91,8 @@ Repo này gom toàn bộ dự án. Trước đây bot nằm ở repo `bot_trade`
   tức trong `confirm_trade_entry`, kiểm chứng bằng 2 bot dry-run song song vài tháng.
 
 ### Việc còn để sau
-- Chạy dry-run thật trên Codespaces / máy nhà 1–2 tháng trước khi dùng tiền thật.
+- Chạy bot trên **Binance Demo** 1–2 tháng (máy nhà; Codespaces chỉ để thử), qua checklist trong `bot/deploy/README.md`
+  bước 6, rồi mới đổi sang key thật — cùng một cấu hình.
 - Nếu muốn nghiên cứu tiếp: thêm dữ liệu mới ngoài nến giá (funding, open interest, long/short ratio, lịch tin).
 - Repo `bot_trade` giờ là bản trùng, có thể archive.
 

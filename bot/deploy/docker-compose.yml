@@ -49,3 +49,10 @@ services:
     profiles: ["setup"]
     entrypoint: ["python", "/deploy/setup.py"]
     command: []
+
+  check:                                    # kiểm tra end-to-end trên Binance Demo: docker compose run --rm check
+    <<: *ft
+    restart: "no"
+    profiles: ["setup"]
+    entrypoint: ["python", "/deploy/demo_check.py"]
+    command: []
