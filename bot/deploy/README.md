@@ -132,6 +132,9 @@ Tài khoản miễn phí có khoảng 60 giờ/tháng với máy 2 nhân.
 
 Không nhập key tài khoản thật trên Codespaces.
 
+## Máy nhà chạy Arch Linux
+Xem `server/README.md`: script dựng server 1 lệnh (docker, tailscale, chặn ngủ, watchdog Tailscale).
+
 ## Lệnh hay dùng
 ```bash
 docker compose ps                    # trạng thái
