@@ -7,7 +7,7 @@ on:
     inputs:
       pairs:
         description: "Coin, cách nhau bởi dấu cách"
-        default: "BTC ETH SOL BNB XRP"
+        default: "BTC ETH SOL BNB XRP DOGE ADA LINK AVAX LTC"
       tfs:
         description: "Khung thời gian"
         default: "4h"
@@ -32,7 +32,7 @@ jobs:
         working-directory: bot
     timeout-minutes: 150
     env:
-      PAIRS: ${{ inputs.pairs || 'BTC ETH SOL BNB XRP' }}
+      PAIRS: ${{ inputs.pairs || 'BTC ETH SOL BNB XRP DOGE ADA LINK AVAX LTC' }}
       TFS: ${{ inputs.tfs || '4h' }}
       ENTRIES: ${{ inputs.entries || '20 55' }}
       RISK: ${{ inputs.risk || '0.5' }}
@@ -45,13 +45,13 @@ jobs:
           cache: pip
           cache-dependency-path: .github/workflows/trend.yml
       - name: Cài freqtrade (cùng bản bot đang chạy)
-        run: pip install -q freqtrade==2026.8
+        run: pip install -q freqtrade==2026.8 tabulate
       - name: Tải dữ liệu Binance Futures (data.binance.vision)
         run: |
           END=$(date -u -d "$(date -u +%Y-%m-01) -1 month" +%Y-%m)
           python research/binance_vision.py --pairs $PAIRS --tf 15m 1h 4h --start 2020-10 --end $END --out data/binance
       - name: Backtest TrendBreakout + ghép DonchianRevert
-        run: python research/trend.py --pairs $PAIRS --tfs $TFS --entries $ENTRIES --risk $RISK --fee $FEE --datadir data/binance --timerange 20210101-
+        run: python research/trend.py --pairs $PAIRS --tfs $TFS --entries $ENTRIES --risk $RISK --fee $FEE --lookahead --datadir data/binance --timerange 20210101-
       - uses: actions/upload-artifact@v4
         with:
           name: research-trend

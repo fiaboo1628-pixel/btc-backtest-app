@@ -80,6 +80,54 @@ def monthly(t: pd.DataFrame, months: pd.PeriodIndex) -> pd.Series:
     return t.groupby(m).profit_abs.sum().reindex(months, fill_value=0.0)
 
 
+def yearly(t: pd.DataFrame) -> pd.Series:
+    """Lãi mỗi năm, % vốn đầu năm (vốn START + lãi cộng dồn các năm trước)."""
+    y = t.groupby(t.close_date.dt.year).profit_abs.sum()
+    return y / (START + y.cumsum().shift(fill_value=0.0)) * 100
+
+
+def walk_forward(cfg_years: dict[str, pd.Series]) -> str:
+    """Mỗi năm Y dùng cấu hình có lãi kép tốt nhất trên các năm < Y (chỉ nhìn quá khứ), ghi lãi năm Y của nó.
+    So với trung bình mọi cấu hình năm đó (= chọn đại) để biết việc chọn có thêm gì không."""
+    df = pd.DataFrame(cfg_years).fillna(0.0)          # hàng = năm, cột = cấu hình
+    out = "| Năm | Cấu hình được chọn (từ các năm trước) | Lãi năm đó | Trung bình mọi cấu hình | Cấu hình tệ nhất |\n|---|---|---|---|---|\n"
+    chosen = []
+    for i, y in enumerate(df.index[1:], start=1):
+        past = (1 + df.iloc[:i] / 100).prod()
+        best = past.idxmax()
+        r = df.loc[y, best]
+        chosen.append(r)
+        out += f"| {y} | {best} | {r:+.0f}% | {df.loc[y].mean():+.0f}% | {df.loc[y].min():+.0f}% |\n"
+    tot = ((1 + pd.Series(chosen) / 100).prod() - 1) * 100
+    out += f"| {df.index[1]}–{df.index[-1]} | cộng dồn | {tot:+.0f}% | | |\n"
+    return out
+
+
+def lookahead(pairs: list[str], a) -> str:
+    """freqtrade lookahead-analysis: chạy lại backtest với dữ liệu cắt ở từng tín hiệu; lệch = nhìn trước tương lai."""
+    work = Path(tempfile.mkdtemp(prefix="la_"))
+    sdir = work / "strategies"
+    sdir.mkdir()
+    shutil.copy(SDIR / "TrendBreakout.py", sdir)
+    cfg = json.loads((ROOT / "cfg_fut.json").read_text())
+    cfg["exchange"]["pair_whitelist"] = [f"{p}/USDT:USDT" for p in pairs]
+    cfg.update(max_open_trades=len(pairs), timeframe="4h", fee=a.fee, dry_run_wallet=START)
+    cfg["entry_pricing"]["price_side"] = cfg["exit_pricing"]["price_side"] = "other"   # lệnh market
+    (work / "cfg.json").write_text(json.dumps(cfg))
+    out = work / "la.csv"
+    cmd = [sys.executable, str(ROOT / "run_futures.py"), "lookahead-analysis", "-c", str(work / "cfg.json"),
+           "--userdir", str(work), "--datadir", a.datadir, "--strategy-path", str(sdir),
+           "--strategy", "TrendBreakout", "--timerange", "20230101-20250101", "--allow-limit-orders",
+           "--minimum-trade-amount", "20", "--targeted-trade-amount", "40",
+           "--lookahead-analysis-exportfilename", str(out)]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if not out.exists():
+        return "Look-ahead: không chạy được\n\n```\n" + (r.stdout[-2000:] + r.stderr[-2000:]) + "\n```\n"
+    res = pd.read_csv(out)
+    shutil.rmtree(work, ignore_errors=True)
+    return "Look-ahead (freqtrade lookahead-analysis, 2023–2024):\n\n" + res.to_markdown(index=False) + "\n"
+
+
 def row(tag: str, s: dict, extra: str = "") -> str:
     if not s.get("trades"):
         return f"| {tag} | 0 | | | | | | | | {extra} |\n"
@@ -100,6 +148,7 @@ def main() -> None:
     ap.add_argument("--entries", type=int, nargs="+", default=[20, 55])
     ap.add_argument("--risk", type=float, default=1.0)
     ap.add_argument("--fee", type=float, default=0.0005, help="phí mỗi chiều (có thể cộng trượt giá ước tính)")
+    ap.add_argument("--lookahead", action="store_true", help="chạy thêm freqtrade lookahead-analysis")
     a = ap.parse_args()
 
     base = backtest("DonchianRevert", "15m", ["BTC"], 1, {"sell": {"risk_pct": a.risk}}, a, None)
@@ -115,7 +164,7 @@ def main() -> None:
            "Tương quan = tương quan lãi theo tháng với DonchianRevert.\n\n" + HEAD)
     md += row("DonchianRevert BTC 15m (hiện tại)", stats(base, months))
     print(md, flush=True)
-    per_pair = []
+    per_pair, cfg_years = [], {}
     for tf in a.tfs:
         detail = "15m" if tf != "15m" else None
         for n in a.entries:
@@ -130,6 +179,8 @@ def main() -> None:
                     print(line, flush=True)
                     continue
                 s = stats(t, months)
+                if len(t):
+                    cfg_years[tag] = yearly(t)
                 corr = monthly(t, months).corr(base_m)
                 both = pd.concat([t[["close_date", "profit_abs"]], base[["close_date", "profit_abs"]]])
                 line = row(tag, s, f"tương quan {corr:+.2f}") + row(f"↳ + Revert BTC", stats(both, months))
@@ -143,6 +194,14 @@ def main() -> None:
     md += ("\n## Lãi USDT theo coin (số lệnh)\n\n| | " + " | ".join(a.pairs) + " |\n|---|"
            + "---|" * len(a.pairs) + "\n" + "".join(per_pair))
     print(md.split("## Lãi USDT theo coin")[1])
+    if len(cfg_years) > 1:
+        wf = "\n## Walk-forward: chọn cấu hình chỉ bằng dữ liệu các năm trước\n\n" + walk_forward(cfg_years)
+        md += wf
+        print(wf, flush=True)
+    if a.lookahead:
+        la = "\n## Kiểm tra nhìn trước tương lai\n\n" + lookahead(a.pairs[:3], a)
+        md += la
+        print(la, flush=True)
     if os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
             f.write(md)
