@@ -1,0 +1,152 @@
+"""
+Nghiên cứu chiến lược thứ hai: TrendBreakout (theo xu hướng) chạy song song DonchianRevert (đánh hồi, BTC 15m).
+
+Với mỗi cấu hình (khung, kênh vào, lọc EMA200) chạy một backtest danh mục nhiều coin, rồi ghép lệnh với
+DonchianRevert BTC để xem: tương quan lãi theo tháng, lãi/DD khi chạy cả hai trên cùng một tài khoản.
+Phí 0.05%/chiều (taker), không tính trượt giá. In bảng markdown, ghi research_trend.md.
+
+  python research/trend.py --pairs BTC ETH SOL BNB XRP --datadir data/binance --timerange 20210101-
+"""
+import argparse
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import zipfile
+from pathlib import Path
+
+import pandas as pd
+
+ROOT = Path(__file__).resolve().parent.parent
+SDIR = ROOT / "user_data" / "strategies"
+FEE = 0.0005
+START = 1000.0
+
+
+def backtest(strategy: str, tf: str, pairs: list[str], max_open: int, params: dict, a, detail: str | None):
+    work = Path(tempfile.mkdtemp(prefix=f"bt_{strategy}_"))
+    sdir = work / "strategies"
+    sdir.mkdir()
+    shutil.copy(SDIR / f"{strategy}.py", sdir)
+    (sdir / f"{strategy}.json").write_text(json.dumps({"strategy_name": strategy, "params": params}))
+    cfg = json.loads((ROOT / "cfg_fut.json").read_text())
+    cfg["exchange"]["pair_whitelist"] = [f"{p}/USDT:USDT" for p in pairs]
+    cfg.update(max_open_trades=max_open, timeframe=tf, fee=FEE, dry_run_wallet=START)
+    (work / "cfg.json").write_text(json.dumps(cfg))
+    (work / "results").mkdir()
+    cmd = [sys.executable, str(ROOT / "run_futures.py"), "backtesting", "-c", str(work / "cfg.json"),
+           "--userdir", str(work), "--datadir", a.datadir, "--strategy-path", str(sdir),
+           "--strategy", strategy, "--timerange", a.timerange, "--export", "trades",
+           "--backtest-directory", str(work / "results"), "--cache", "none"]
+    if detail:
+        cmd += ["--timeframe-detail", detail]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    zips = sorted((work / "results").glob("*.zip"))
+    if r.returncode or not zips:
+        print(r.stdout[-3000:], r.stderr[-3000:], file=sys.stderr)
+        return None
+    with zipfile.ZipFile(zips[-1]) as z:
+        name = next(n for n in z.namelist() if n.endswith(".json") and "config" not in n)
+        res = json.load(z.open(name))["strategy"][strategy]
+    shutil.rmtree(work, ignore_errors=True)
+    t = pd.DataFrame(res["trades"])
+    if len(t):
+        t["close_date"] = pd.to_datetime(t.close_date, utc=True)
+    return t
+
+
+def stats(t: pd.DataFrame, months: pd.PeriodIndex) -> dict:
+    """Lãi/DD tính trên vốn START, cộng dồn profit_abs theo thời điểm đóng lệnh (DD theo lệnh đóng)."""
+    if t is None or not len(t):
+        return {"trades": 0}
+    t = t.sort_values("close_date")
+    eq = START + t.profit_abs.cumsum()
+    dd = ((eq.cummax() - eq) / eq.cummax()).max() * 100
+    win, loss = t.profit_abs[t.profit_abs > 0].sum(), -t.profit_abs[t.profit_abs < 0].sum()
+    y = t.groupby(t.close_date.dt.year).profit_abs.sum()
+    m = monthly(t, months)
+    return {"trades": len(t), "per_month": len(t) / len(months), "profit": (eq.iloc[-1] / START - 1) * 100,
+            "dd": dd, "pf": win / loss if loss else float("inf"), "months_up": 100 * (m > 0).mean(),
+            "years_up": f"{(y > 0).sum()}/{len(y)}",
+            "years": " ".join(f"{k % 100:02d}:{v:+.0f}" for k, v in y.items())}
+
+
+def monthly(t: pd.DataFrame, months: pd.PeriodIndex) -> pd.Series:
+    if t is None or not len(t):
+        return pd.Series(0.0, index=months)
+    m = t.close_date.dt.tz_localize(None).dt.to_period("M")
+    return t.groupby(m).profit_abs.sum().reindex(months, fill_value=0.0)
+
+
+def row(tag: str, s: dict, extra: str = "") -> str:
+    if not s.get("trades"):
+        return f"| {tag} | 0 | | | | | | | | {extra} |\n"
+    return (f"| {tag} | {s['trades']} | {s['per_month']:.1f} | {s['profit']:+.1f} | {s['dd']:.1f} | {s['pf']:.2f} | "
+            f"{s['months_up']:.0f} | {s['years_up']} | {s['years']} | {extra} |\n")
+
+
+HEAD = ("| | Lệnh | Lệnh/tháng | Lãi % | DD % | PF | Tháng lãi % | Năm lãi | Lãi theo năm (USDT) | Ghi chú |\n"
+        "|---|---|---|---|---|---|---|---|---|---|\n")
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--pairs", nargs="+", required=True)
+    ap.add_argument("--datadir", default="user_data/data/binance")
+    ap.add_argument("--timerange", default="20210101-")
+    ap.add_argument("--tfs", nargs="+", default=["4h", "1h"])
+    ap.add_argument("--entries", type=int, nargs="+", default=[20, 55])
+    ap.add_argument("--risk", type=float, default=1.0)
+    a = ap.parse_args()
+
+    base = backtest("DonchianRevert", "15m", ["BTC"], 1, {"sell": {"risk_pct": a.risk}}, a, None)
+    if base is None or not len(base):
+        sys.exit("DonchianRevert BTC không chạy được")
+    first = pd.Timestamp(a.timerange.split("-")[0]).to_period("M")
+    months = pd.period_range(first, base.close_date.max().tz_localize(None).to_period("M"), freq="M")
+    base_m = monthly(base, months)
+
+    md = f"## TrendBreakout: danh mục {' '.join(a.pairs)}, rủi ro {a.risk}%/lệnh, phí {FEE:.2%}/chiều, {a.timerange}\n\n"
+    md += ("Mỗi dòng TrendBreakout là một backtest danh mục (tối đa 1 lệnh mỗi coin). Dòng \"+ Revert\" là chạy thêm "
+           "DonchianRevert BTC trên cùng tài khoản (cộng lãi USDT của hai bên, không tính lãi kép chéo). "
+           "Tương quan = tương quan lãi theo tháng với DonchianRevert.\n\n" + HEAD)
+    md += row("DonchianRevert BTC 15m (hiện tại)", stats(base, months))
+    print(md, flush=True)
+    per_pair = []
+    for tf in a.tfs:
+        detail = "15m" if tf != "15m" else None
+        for n in a.entries:
+            for ema in (False, True):
+                tag = f"Trend {tf} kênh {n}/{n // 2}{' +EMA200' if ema else ''}"
+                p = {"buy": {"entry_period": n, "ema_filter": ema},
+                     "sell": {"exit_period": n // 2, "risk_pct": a.risk, "fixed_lev": True}}
+                t = backtest("TrendBreakout", tf, a.pairs, len(a.pairs), p, a, detail)
+                if t is None:
+                    line = f"| {tag} | lỗi | | | | | | | | |\n"
+                    md += line
+                    print(line, flush=True)
+                    continue
+                s = stats(t, months)
+                corr = monthly(t, months).corr(base_m)
+                both = pd.concat([t[["close_date", "profit_abs"]], base[["close_date", "profit_abs"]]])
+                line = row(tag, s, f"tương quan {corr:+.2f}") + row(f"↳ + Revert BTC", stats(both, months))
+                md += line
+                print(line, flush=True)
+                if len(t):
+                    g = t.groupby("pair").profit_abs.agg(["count", "sum"])
+                    per_pair.append(f"| {tag} | " + " | ".join(
+                        f"{g.loc[f'{c}/USDT:USDT', 'sum']:+.0f} ({g.loc[f'{c}/USDT:USDT', 'count']:.0f})"
+                        if f"{c}/USDT:USDT" in g.index else "0 (0)" for c in a.pairs) + " |\n")
+    md += ("\n## Lãi USDT theo coin (số lệnh)\n\n| | " + " | ".join(a.pairs) + " |\n|---|"
+           + "---|" * len(a.pairs) + "\n" + "".join(per_pair))
+    print(md.split("## Lãi USDT theo coin")[1])
+    if os.environ.get("GITHUB_STEP_SUMMARY"):
+        with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+            f.write(md)
+    Path("research_trend.md").write_text(md)
+
+
+if __name__ == "__main__":
+    main()

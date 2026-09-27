@@ -1,9 +1,10 @@
 """
 Tải dữ liệu Binance USDT-M Futures thật từ kho công khai data.binance.vision (không cần API, không bị chặn
 như api.binance.com) và ghi ra định dạng freqtrade futures:
-  <BASE>_USDT_USDT-15m-futures.feather, -1h-mark.feather, -1h-funding_rate.feather
+  <BASE>_USDT_USDT-<tf>-futures.feather (mỗi --tf một file), -1h-mark.feather, -1h-funding_rate.feather
 
   python research/binance_vision.py --pairs BTC ETH SOL --start 2020-10 --end 2026-08 --out user_data/data/binance
+  python research/binance_vision.py --pairs BTC ETH --tf 15m 1h 4h --end 2026-08
 """
 import argparse
 import io
@@ -75,7 +76,7 @@ def main() -> None:
     ap.add_argument("--pairs", nargs="+", default=["BTC"])
     ap.add_argument("--start", default="2020-10")
     ap.add_argument("--end", required=True, help="tháng cuối đã trọn vẹn, ví dụ 2026-08")
-    ap.add_argument("--tf", default="15m")
+    ap.add_argument("--tf", nargs="+", default=["15m"])
     ap.add_argument("--out", default="user_data/data/binance")
     a = ap.parse_args()
     out = Path(a.out) / "futures"
@@ -83,15 +84,21 @@ def main() -> None:
     ms = months(a.start, a.end)
     for base in a.pairs:
         sym = f"{base}USDT"
-        k = klines(sym, "klines", a.tf, ms)
-        if k.empty:
+        got, span = [], ""
+        for tf in a.tf:
+            k = klines(sym, "klines", tf, ms)
+            if k.empty:
+                continue
+            k.to_feather(out / f"{base}_USDT_USDT-{tf}-futures.feather")
+            got.append(f"{len(k)} nến {tf}")
+            span = span or f"{k.date.iloc[0]:%Y-%m-%d} → {k.date.iloc[-1]:%Y-%m-%d}"
+        if not got:
             print(f"{sym}: không có dữ liệu")
             continue
-        k.to_feather(out / f"{base}_USDT_USDT-{a.tf}-futures.feather")
         mark = klines(sym, "markPriceKlines", "1h", ms)
         mark.to_feather(out / f"{base}_USDT_USDT-1h-mark.feather")
         funding(sym, ms, mark["date"]).to_feather(out / f"{base}_USDT_USDT-1h-funding_rate.feather")
-        print(f"{sym}: {len(k)} nến {a.tf} ({k.date.iloc[0]:%Y-%m-%d} → {k.date.iloc[-1]:%Y-%m-%d}), "
+        print(f"{sym}: {', '.join(got)} ({span}), "
               f"{len(mark)} nến mark 1h")
 
 

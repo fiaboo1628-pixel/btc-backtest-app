@@ -1,0 +1,50 @@
+# Nghiên cứu chiến lược thứ hai TrendBreakout (theo xu hướng) trên dữ liệu Binance Futures thật, ghép với
+# DonchianRevert BTC. Kết quả: tab Summary của lần chạy + artifact research-trend.
+name: trend
+
+on:
+  workflow_dispatch:
+    inputs:
+      pairs:
+        description: "Coin, cách nhau bởi dấu cách"
+        default: "BTC ETH SOL BNB XRP"
+      tfs:
+        description: "Khung thời gian"
+        default: "4h 1h"
+      entries:
+        description: "Số nến kênh vào lệnh (thoát = một nửa)"
+        default: "20 55"
+  push:
+    branches: ["claude/**", "research/**"]
+    paths: ["bot/research/trend.py", "bot/user_data/strategies/TrendBreakout.py", ".github/workflows/trend.yml"]
+
+jobs:
+  trend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bot
+    timeout-minutes: 150
+    env:
+      PAIRS: ${{ inputs.pairs || 'BTC ETH SOL BNB XRP' }}
+      TFS: ${{ inputs.tfs || '4h 1h' }}
+      ENTRIES: ${{ inputs.entries || '20 55' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: .github/workflows/trend.yml
+      - name: Cài freqtrade (cùng bản bot đang chạy)
+        run: pip install -q freqtrade==2026.8
+      - name: Tải dữ liệu Binance Futures (data.binance.vision)
+        run: |
+          END=$(date -u -d "$(date -u +%Y-%m-01) -1 month" +%Y-%m)
+          python research/binance_vision.py --pairs $PAIRS --tf 15m 1h 4h --start 2020-10 --end $END --out data/binance
+      - name: Backtest TrendBreakout + ghép DonchianRevert
+        run: python research/trend.py --pairs $PAIRS --tfs $TFS --entries $ENTRIES --datadir data/binance --timerange 20210101-
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-trend
+          path: bot/research_trend.md
