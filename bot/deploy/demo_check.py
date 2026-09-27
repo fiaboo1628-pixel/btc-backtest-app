@@ -53,6 +53,16 @@ def last_price(ex) -> float:
     return float(t.get("last") or t.get("close") or t.get("ask"))
 
 
+def wait_status(ex, order_id: str, want: tuple[str, ...], timeout: float = 5.0) -> dict:
+    """Đọc lại lệnh stop tới khi đạt trạng thái mong muốn: sàn cập nhật sau lệnh huỷ ~0.2 s, đọc ngay có thể vẫn 'open'."""
+    t0 = time.time()
+    while True:
+        o = ex.fetch_stoploss_order(order_id, PAIR)
+        if o.get("status") in want or time.time() - t0 > timeout:
+            return o
+        time.sleep(0.5)
+
+
 def load_config() -> dict:
     from freqtrade.configuration import Configuration
     from freqtrade.enums import RunMode
@@ -188,7 +198,7 @@ def main() -> int:
         stop2 = ex.price_to_precision(PAIR, fill * 0.98)
         try:
             ex.cancel_stoploss_order(stop_ids[-1], PAIR)
-            old = ex.fetch_stoploss_order(stop_ids[-1], PAIR)
+            old = wait_status(ex, stop_ids[-1], ("canceled", "cancelled"))
             s2 = ex.create_stoploss(pair=PAIR, amount=amount, stop_price=stop2, order_types=order_types,
                                     side="sell", leverage=LEVERAGE)
             stop_ids.append(s2["id"])
