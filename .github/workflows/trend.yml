@@ -20,6 +20,9 @@ on:
       fee:
         description: "Phí + trượt giá mỗi chiều (0.0008 = 0.05% phí + 0.03% trượt)"
         default: "0.0008"
+      mode:
+        description: "full = backtest đầy đủ; checks = chỉ kiểm look-ahead/recursive (3 coin đầu)"
+        default: "full"
   push:
     branches: ["claude/**", "research/**"]
     paths: ["bot/research/trend.py", "bot/user_data/strategies/TrendBreakout.py", ".github/workflows/trend.yml"]
@@ -37,6 +40,7 @@ jobs:
       ENTRIES: ${{ inputs.entries || '20 55' }}
       RISK: ${{ inputs.risk || '0.5' }}
       FEE: ${{ inputs.fee || '0.0008' }}
+      MODE: ${{ inputs.mode || 'checks' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -51,7 +55,9 @@ jobs:
           END=$(date -u -d "$(date -u +%Y-%m-01) -1 month" +%Y-%m)
           python research/binance_vision.py --pairs $PAIRS --tf 15m 1h 4h --start 2020-10 --end $END --out data/binance
       - name: Backtest TrendBreakout + ghép DonchianRevert
-        run: python research/trend.py --pairs $PAIRS --tfs $TFS --entries $ENTRIES --risk $RISK --fee $FEE --lookahead --datadir data/binance --timerange 20210101-
+        run: |
+          if [ "$MODE" = checks ]; then EXTRA=--checks-only; else EXTRA=--lookahead; fi
+          python research/trend.py --pairs $PAIRS --tfs $TFS --entries $ENTRIES --risk $RISK --fee $FEE $EXTRA --datadir data/binance --timerange 20210101-
       - uses: actions/upload-artifact@v4
         with:
           name: research-trend

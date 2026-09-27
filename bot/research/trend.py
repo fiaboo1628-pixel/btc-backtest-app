@@ -124,8 +124,22 @@ def lookahead(pairs: list[str], a) -> str:
     if not out.exists():
         return "Look-ahead: không chạy được\n\n```\n" + (r.stdout[-2000:] + r.stderr[-2000:]) + "\n```\n"
     res = pd.read_csv(out)
+    # lệnh nào bị báo lệch và cột chỉ báo nào (nếu có) — để phân biệt lệch thật với báo nhầm
+    flagged = [ln.split(" - ", 3)[-1] for ln in (r.stdout + r.stderr).splitlines()
+               if "lookahead-bias in trade" in ln or "look ahead bias in column" in ln]
+    md = "Look-ahead (freqtrade lookahead-analysis, 2023–2024):\n\n" + res.to_markdown(index=False) + "\n"
+    if flagged:
+        md += "\n```\n" + "\n".join(flagged) + "\n```\n"
+    cmd = [sys.executable, str(ROOT / "run_futures.py"), "recursive-analysis", "-c", str(work / "cfg.json"),
+           "--userdir", str(work), "--datadir", a.datadir, "--strategy-path", str(sdir),
+           "--strategy", "TrendBreakout", "--timerange", "20240101-20240301", "-p", f"{pairs[0]}/USDT:USDT",
+           "--startup-candle", "250", "500", "1000"]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    tail = [ln for ln in r.stdout.splitlines() if "|" in ln or "No variance" in ln or "variance" in ln.lower()]
+    md += "\nRecursive-analysis (chỉ báo đệ quy lệch bao nhiêu khi đổi số nến khởi động):\n\n```\n" + (
+        "\n".join(tail[-30:]) or (r.stdout[-1500:] + r.stderr[-1500:])) + "\n```\n"
     shutil.rmtree(work, ignore_errors=True)
-    return "Look-ahead (freqtrade lookahead-analysis, 2023–2024):\n\n" + res.to_markdown(index=False) + "\n"
+    return md
 
 
 def row(tag: str, s: dict, extra: str = "") -> str:
@@ -149,7 +163,17 @@ def main() -> None:
     ap.add_argument("--risk", type=float, default=1.0)
     ap.add_argument("--fee", type=float, default=0.0005, help="phí mỗi chiều (có thể cộng trượt giá ước tính)")
     ap.add_argument("--lookahead", action="store_true", help="chạy thêm freqtrade lookahead-analysis")
+    ap.add_argument("--checks-only", action="store_true", help="chỉ chạy look-ahead + recursive-analysis")
     a = ap.parse_args()
+
+    if a.checks_only:
+        md = "## Kiểm tra nhìn trước tương lai\n\n" + lookahead(a.pairs[:3], a)
+        print(md, flush=True)
+        if os.environ.get("GITHUB_STEP_SUMMARY"):
+            with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+                f.write(md)
+        Path("research_trend.md").write_text(md)
+        return
 
     base = backtest("DonchianRevert", "15m", ["BTC"], 1, {"sell": {"risk_pct": a.risk}}, a, None)
     if base is None or not len(base):
