@@ -133,7 +133,7 @@ def lookahead(pairs: list[str], a) -> str:
     cmd = [sys.executable, str(ROOT / "run_futures.py"), "recursive-analysis", "-c", str(work / "cfg.json"),
            "--userdir", str(work), "--datadir", a.datadir, "--strategy-path", str(sdir),
            "--strategy", "TrendBreakout", "--timerange", "20240101-20240301", "-p", f"{pairs[0]}/USDT:USDT",
-           "--startup-candle", "250", "500", "1000"]
+           "--startup-candle", "500", "1000"]
     r = subprocess.run(cmd, capture_output=True, text=True)
     tail = [ln for ln in r.stdout.splitlines() if "|" in ln or "No variance" in ln or "variance" in ln.lower()]
     md += "\nRecursive-analysis (chỉ báo đệ quy lệch bao nhiêu khi đổi số nến khởi động):\n\n```\n" + (

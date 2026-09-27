@@ -34,7 +34,7 @@ from freqtrade.strategy import (
 class TrendBreakout(IStrategy):
     INTERFACE_VERSION = 3
     timeframe = "4h"
-    startup_candle_count = 250
+    startup_candle_count = 500               # EMA200 cần ~500 nến mới ổn định (recursive-analysis: 250 lệch 2%, 500 lệch 0.04%)
     can_short = True
     minimal_roi = {"0": 100}
     stoploss = -0.50                  # lưới an toàn; SL thật nằm trong custom_stoploss
