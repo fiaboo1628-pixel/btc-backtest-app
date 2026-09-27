@@ -10,10 +10,16 @@ on:
         default: "BTC ETH SOL BNB XRP"
       tfs:
         description: "Khung thời gian"
-        default: "4h 1h"
+        default: "4h"
       entries:
         description: "Số nến kênh vào lệnh (thoát = một nửa)"
         default: "20 55"
+      risk:
+        description: "Rủi ro %/lệnh"
+        default: "0.5"
+      fee:
+        description: "Phí + trượt giá mỗi chiều (0.0008 = 0.05% phí + 0.03% trượt)"
+        default: "0.0008"
   push:
     branches: ["claude/**", "research/**"]
     paths: ["bot/research/trend.py", "bot/user_data/strategies/TrendBreakout.py", ".github/workflows/trend.yml"]
@@ -27,8 +33,10 @@ jobs:
     timeout-minutes: 150
     env:
       PAIRS: ${{ inputs.pairs || 'BTC ETH SOL BNB XRP' }}
-      TFS: ${{ inputs.tfs || '4h 1h' }}
+      TFS: ${{ inputs.tfs || '4h' }}
       ENTRIES: ${{ inputs.entries || '20 55' }}
+      RISK: ${{ inputs.risk || '0.5' }}
+      FEE: ${{ inputs.fee || '0.0008' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -43,7 +51,7 @@ jobs:
           END=$(date -u -d "$(date -u +%Y-%m-01) -1 month" +%Y-%m)
           python research/binance_vision.py --pairs $PAIRS --tf 15m 1h 4h --start 2020-10 --end $END --out data/binance
       - name: Backtest TrendBreakout + ghép DonchianRevert
-        run: python research/trend.py --pairs $PAIRS --tfs $TFS --entries $ENTRIES --datadir data/binance --timerange 20210101-
+        run: python research/trend.py --pairs $PAIRS --tfs $TFS --entries $ENTRIES --risk $RISK --fee $FEE --datadir data/binance --timerange 20210101-
       - uses: actions/upload-artifact@v4
         with:
           name: research-trend

@@ -3,7 +3,7 @@ Nghiên cứu chiến lược thứ hai: TrendBreakout (theo xu hướng) chạy
 
 Với mỗi cấu hình (khung, kênh vào, lọc EMA200) chạy một backtest danh mục nhiều coin, rồi ghép lệnh với
 DonchianRevert BTC để xem: tương quan lãi theo tháng, lãi/DD khi chạy cả hai trên cùng một tài khoản.
-Phí 0.05%/chiều (taker), không tính trượt giá. In bảng markdown, ghi research_trend.md.
+Phí mặc định 0.05%/chiều (taker); --fee cao hơn để tính cả trượt giá. In bảng markdown, ghi research_trend.md.
 
   python research/trend.py --pairs BTC ETH SOL BNB XRP --datadir data/binance --timerange 20210101-
 """
@@ -21,7 +21,6 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parent.parent
 SDIR = ROOT / "user_data" / "strategies"
-FEE = 0.0005
 START = 1000.0
 
 
@@ -33,7 +32,7 @@ def backtest(strategy: str, tf: str, pairs: list[str], max_open: int, params: di
     (sdir / f"{strategy}.json").write_text(json.dumps({"strategy_name": strategy, "params": params}))
     cfg = json.loads((ROOT / "cfg_fut.json").read_text())
     cfg["exchange"]["pair_whitelist"] = [f"{p}/USDT:USDT" for p in pairs]
-    cfg.update(max_open_trades=max_open, timeframe=tf, fee=FEE, dry_run_wallet=START)
+    cfg.update(max_open_trades=max_open, timeframe=tf, fee=a.fee, dry_run_wallet=START)
     (work / "cfg.json").write_text(json.dumps(cfg))
     (work / "results").mkdir()
     cmd = [sys.executable, str(ROOT / "run_futures.py"), "backtesting", "-c", str(work / "cfg.json"),
@@ -66,11 +65,12 @@ def stats(t: pd.DataFrame, months: pd.PeriodIndex) -> dict:
     dd = ((eq.cummax() - eq) / eq.cummax()).max() * 100
     win, loss = t.profit_abs[t.profit_abs > 0].sum(), -t.profit_abs[t.profit_abs < 0].sum()
     y = t.groupby(t.close_date.dt.year).profit_abs.sum()
+    y_start = START + y.cumsum().shift(fill_value=0.0)      # vốn đầu mỗi năm
     m = monthly(t, months)
     return {"trades": len(t), "per_month": len(t) / len(months), "profit": (eq.iloc[-1] / START - 1) * 100,
             "dd": dd, "pf": win / loss if loss else float("inf"), "months_up": 100 * (m > 0).mean(),
             "years_up": f"{(y > 0).sum()}/{len(y)}",
-            "years": " ".join(f"{k % 100:02d}:{v:+.0f}" for k, v in y.items())}
+            "years": " ".join(f"{k % 100:02d}:{v / y_start[k] * 100:+.0f}%" for k, v in y.items())}
 
 
 def monthly(t: pd.DataFrame, months: pd.PeriodIndex) -> pd.Series:
@@ -87,7 +87,7 @@ def row(tag: str, s: dict, extra: str = "") -> str:
             f"{s['months_up']:.0f} | {s['years_up']} | {s['years']} | {extra} |\n")
 
 
-HEAD = ("| | Lệnh | Lệnh/tháng | Lãi % | DD % | PF | Tháng lãi % | Năm lãi | Lãi theo năm (USDT) | Ghi chú |\n"
+HEAD = ("| | Lệnh | Lệnh/tháng | Lãi % | DD % | PF | Tháng lãi % | Năm lãi | Lãi từng năm (% vốn đầu năm) | Ghi chú |\n"
         "|---|---|---|---|---|---|---|---|---|---|\n")
 
 
@@ -99,6 +99,7 @@ def main() -> None:
     ap.add_argument("--tfs", nargs="+", default=["4h", "1h"])
     ap.add_argument("--entries", type=int, nargs="+", default=[20, 55])
     ap.add_argument("--risk", type=float, default=1.0)
+    ap.add_argument("--fee", type=float, default=0.0005, help="phí mỗi chiều (có thể cộng trượt giá ước tính)")
     a = ap.parse_args()
 
     base = backtest("DonchianRevert", "15m", ["BTC"], 1, {"sell": {"risk_pct": a.risk}}, a, None)
@@ -108,7 +109,7 @@ def main() -> None:
     months = pd.period_range(first, base.close_date.max().tz_localize(None).to_period("M"), freq="M")
     base_m = monthly(base, months)
 
-    md = f"## TrendBreakout: danh mục {' '.join(a.pairs)}, rủi ro {a.risk}%/lệnh, phí {FEE:.2%}/chiều, {a.timerange}\n\n"
+    md = f"## TrendBreakout: danh mục {' '.join(a.pairs)}, rủi ro {a.risk}%/lệnh, phí {a.fee:.2%}/chiều, {a.timerange}\n\n"
     md += ("Mỗi dòng TrendBreakout là một backtest danh mục (tối đa 1 lệnh mỗi coin). Dòng \"+ Revert\" là chạy thêm "
            "DonchianRevert BTC trên cùng tài khoản (cộng lãi USDT của hai bên, không tính lãi kép chéo). "
            "Tương quan = tương quan lãi theo tháng với DonchianRevert.\n\n" + HEAD)
