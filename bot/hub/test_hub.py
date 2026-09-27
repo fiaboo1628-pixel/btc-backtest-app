@@ -19,14 +19,14 @@ BASIC = {"authorization": "Basic " + base64.b64encode(b"admin:pw").decode()}
 TS = {"tailscale-user-login": "me@example.com"}
 
 
-def make_app(tmp_path, **extra):
+def make_app(tmp_path, client="127.0.0.1", **extra):
     cfg = {"strategy": "DonchianRevert",
            "hub": {"username": "admin", "password": "pw", "trust_tailscale": True},
            "app_dir": str(REPO),
            "data": {"dir": str(tmp_path / "data"), "datasets": [
                {"market": "futures", "symbol": "BTCUSDT", "tf": "15m", "from": "2024-01-01"}]},
            **extra}
-    return TestClient(server.create_app(cfg))
+    return TestClient(server.create_app(cfg), client=(client, 50000))
 
 
 def test_auth(tmp_path):
@@ -41,6 +41,34 @@ def test_allowed_logins(tmp_path):
     c = make_app(tmp_path, hub={"password": "pw", "allowed_logins": ["boss@x.com"]})
     assert c.get("/api/hub", headers=TS).status_code == 401
     assert c.get("/api/hub", headers={"tailscale-user-login": "boss@x.com"}).status_code == 200
+
+
+def test_tailscale_header_only_from_proxy(tmp_path):
+    """Container khác trong mạng Docker (hay bất kỳ ai tới thẳng cổng 8090) không giả được header Tailscale."""
+    c = make_app(tmp_path, client="172.18.0.5", hub={"password": "pw", "tailscale_proxies": ["172.18.0.1"]})
+    assert c.get("/api/hub", headers=TS).status_code == 401
+    assert c.get("/api/hub", headers=BASIC).status_code == 200
+    c = make_app(tmp_path, client="172.18.0.1", hub={"password": "pw", "tailscale_proxies": ["172.18.0.1"]})
+    assert c.get("/api/hub", headers=TS).status_code == 200
+
+
+def test_default_gateway_parsing(tmp_path, monkeypatch):
+    route = "Iface Destination Gateway\neth0 000012AC 00000000\neth0 00000000 010012AC\n"
+    real = server.Path.read_text
+    monkeypatch.setattr(server.Path, "read_text",
+                        lambda self, *a, **k: route if str(self) == "/proc/net/route" else real(self, *a, **k))
+    assert server.default_gateway() == "172.18.0.1"
+
+
+def test_cross_site_write_blocked(tmp_path):
+    c = make_app(tmp_path)
+    h = {**TS, "content-type": "application/json"}
+    assert c.post("/api/tune/apply", json={}, headers={**h, "sec-fetch-site": "cross-site"}).status_code == 403
+    assert c.post("/api/tune/apply", json={}, headers={**h, "origin": "https://evil.example"}).status_code == 403
+    # cùng trang: qua được bước chặn (405 vì bản thử này không bật Chỉnh tham số)
+    assert c.post("/api/tune/apply", json={}, headers={**h, "sec-fetch-site": "same-origin"}).status_code == 405
+    assert c.post("/api/tune/apply", json={}, headers={**h, "origin": "http://testserver"}).status_code == 405
+    assert c.get("/api/hub", headers={**TS, "sec-fetch-site": "cross-site"}).status_code == 200
 
 
 def test_tailscale_can_be_disabled(tmp_path):

@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { toBotParams } from "../js/botparams.js";
+import { toBotParams, BOT_LIMITS } from "../js/botparams.js";
 import { DEFAULT_EXIT, DEFAULT_ACCOUNT } from "../js/engine.js";
 
 const preset = (f) => JSON.parse(readFileSync(new URL(`../presets/${f}`, import.meta.url)));
@@ -36,7 +36,7 @@ test("chỉnh ngưỡng, tắt Short, tắt trailing", () => {
   s.short = []; s.exit.trailStartR = 0; s.account.riskPct = 0.5;
   const p = toBotParams(s).params;
   assert.equal(p.dc_long, 0.05); assert.equal(p.adx_min, 25); assert.equal(p.short_enabled, false);
-  assert.equal(p.trail_on, false); assert.equal("trail_start_r" in p, false); assert.equal("dc_short" in p, false);
+  assert.equal(p.trail_on, false); assert.equal("trail_start_r" in p, false); assert.equal("trail_dist_r" in p, false); assert.equal("dc_short" in p, false);
   assert.equal(p.risk_pct, 0.5);
 });
 
@@ -52,6 +52,10 @@ test("không khớp khuôn thì báo lý do", () => {
     [(s) => { s.exit.maxHoldBars = 10; }, /time exit/],
     [(s) => { s.long.splice(1, 1); s.short.splice(1, 1); }, /missing the adx/],
     [(s) => { s.long = []; }, /Long/],
+    [(s) => { s.exit.trailStartR = 8; }, /trail_start_r from 0.5 to 5/],
+    [(s) => { s.exit.trailDistR = 3; }, /trail_dist_r from 0.1 to 2/],
+    [(s) => { s.account.maxLev = 20; }, /max_lev from 1 to 10/],
+    [(s) => { s.long[0].params.n = 20.5; s.short[0].params.n = 20.5; }, /whole number for dc_period/],
   ];
   for (const [mut, re] of bad) {
     const s = clone(base); mut(s);
@@ -59,5 +63,14 @@ test("không khớp khuôn thì báo lý do", () => {
   }
   for (const f of ["bb_revert.json", "msb_ob_retest.json", "trend_1h_filter.json"]) {
     assert.throws(() => toBotParams(full(preset(f))), Error, f);
+  }
+});
+
+test("giới hạn trong app khớp giới hạn trong DonchianRevert.py", () => {
+  const py = readFileSync(new URL("../bot/user_data/strategies/DonchianRevert.py", import.meta.url), "utf8");
+  for (const [k, [lo, hi]] of Object.entries(BOT_LIMITS)) {
+    const m = py.match(new RegExp(`${k} = \\w+Parameter\\(([^,]+), ([^,]+),`));
+    assert.ok(m, k);
+    assert.deepEqual([Number(m[1]), Number(m[2])], [lo, hi], k);
   }
 });

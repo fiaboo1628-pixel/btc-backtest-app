@@ -31,7 +31,11 @@ PC / iPhone ──Tailscale HTTPS──► tailscale serve ──► hub (127.0.
 ## Đăng nhập
 
 - Qua `tailscale serve`: Tailscale đã xác thực người dùng (header `Tailscale-User-Login`) → **không hỏi mật khẩu**.
-  Giới hạn tài khoản được vào: `"allowed_logins": ["ban@gmail.com"]` trong `hub.json`. Tắt hẳn: `"trust_tailscale": false`.
+  **Nên đặt** `"allowed_logins": ["ban@gmail.com"]` trong `hub.json` — để trống thì mọi tài khoản Tailscale
+  thấy được máy chủ (kể cả người được share máy) đều vào được. Tắt hẳn: `"trust_tailscale": false`.
+  Header này chỉ được tin khi tới từ phía `tailscale serve` (loopback hoặc gateway Docker; đổi bằng
+  `"tailscale_proxies": ["127.0.0.1", "172.18.0.1"]`), nên container khác không giả được.
+- Các API ghi (ví dụ gửi tham số sang bot) chặn yêu cầu từ trang web khác (`Sec-Fetch-Site` / `Origin`).
 - Cách khác (localhost, SSH tunnel, Codespaces): hỏi `admin` / mật khẩu trong `hub.json` (setup in ra).
 - Cổng 8090 chỉ mở trên `127.0.0.1` của máy. **Không mở ra internet.**
 - Hub chỉ phục vụ đúng file của app (`index.html`, `sw.js`, `manifest.webmanifest`, `js/`, `css/`, `icons/`,

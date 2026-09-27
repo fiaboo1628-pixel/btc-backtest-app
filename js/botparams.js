@@ -13,6 +13,15 @@ const RULES = {
   atr_pct: { n: 14, op: ">=", key: "atr_min_pct" },
 };
 
+// Giới hạn tham số trong bot/user_data/strategies/DonchianRevert.py (hub cũng kiểm tra lại) — báo ngay
+// trong app, thay vì để app cho chọn giá trị bot không nhận rồi hub từ chối lúc gửi.
+export const BOT_LIMITS = {
+  dc_period: [10, 50], dc_long: [0, 0.3], dc_short: [0.7, 1], adx_min: [10, 50], vol_max: [0.3, 3],
+  atr_min_pct: [0, 1.5], r_atr: [1, 6], trail_start_r: [0.5, 5], trail_dist_r: [0.1, 2], tp_r: [0, 10],
+  risk_pct: [0.1, 3], max_lev: [1, 10],
+};
+const INT_PARAMS = new Set(["dc_period", "adx_min", "max_lev"]);
+
 function readSide(conds, side, tradeTf) {
   const out = {};
   for (const [i, c] of conds.entries()) {
@@ -56,13 +65,16 @@ export function toBotParams(s, botTf = "15m") {
   const params = {
     dc_period: L.dpos.n, dc_long: L.dpos.value, adx_min: L.adx_min, vol_max: L.vol_max, atr_min_pct: L.atr_min_pct,
     short_enabled: !!S,
-    r_atr: ex.rAtr, trail_on: ex.trailStartR > 0, trail_dist_r: ex.trailDistR, tp_r: ex.tpR || 0,
+    r_atr: ex.rAtr, trail_on: ex.trailStartR > 0, tp_r: ex.tpR || 0,
     risk_pct: acc.riskPct, max_lev: acc.maxLev,
   };
   if (S) params.dc_short = S.dpos.value;
-  if (ex.trailStartR > 0) params.trail_start_r = ex.trailStartR;
+  if (ex.trailStartR > 0) { params.trail_start_r = ex.trailStartR; params.trail_dist_r = ex.trailDistR; }
   for (const [k, v] of Object.entries(params)) {
     if (v === undefined || (typeof v === "number" && !Number.isFinite(v))) throw new Error(`Missing value for ${k}`);
+    const lim = BOT_LIMITS[k];
+    if (lim && (v < lim[0] || v > lim[1])) throw new Error(`the bot accepts ${k} from ${lim[0]} to ${lim[1]} (now ${v})`);
+    if (INT_PARAMS.has(k) && !Number.isInteger(v)) throw new Error(`the bot needs a whole number for ${k} (now ${v})`);
   }
   return { params };
 }
