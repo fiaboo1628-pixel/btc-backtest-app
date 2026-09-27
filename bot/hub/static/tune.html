@@ -265,7 +265,7 @@ const same = (a, b) => state.schema.params.every((p) => a[p.name] === b[p.name])
 async function refreshLive() {
   const pill = $("#livePill");
   try {
-    const s = await api("/api/live");
+    const s = await api("/api/tune/live");
     if (!s.reachable) { pill.className = "pill bad"; pill.textContent = "Bot live: mất kết nối"; return; }
     const mode = s.dry_run ? "Dry-run" : "Live";
     const running = s.state === "running";
@@ -280,7 +280,7 @@ async function runBacktest() {
   $("#resultBox").classList.remove("hidden");
   $("#btnRun").disabled = true;
   try {
-    await api("/api/backtest", { method: "POST", body: JSON.stringify({ params: state.values, timerange: timerange() }) });
+    await api("/api/tune/backtest", { method: "POST", body: JSON.stringify({ params: state.values, timerange: timerange() }) });
     poll();
   } catch (e) { msg($("#resultMsg"), e.message); $("#btnRun").disabled = false; }
 }
@@ -290,7 +290,7 @@ async function poll() {
   const prog = $("#prog"); prog.classList.remove("hidden");
   try {
     for (;;) {
-      const r = await api("/api/backtest");
+      const r = await api("/api/tune/backtest");
       prog.firstElementChild.style.width = `${Math.round((r.progress || 0) * 100)}%`;
       if (r.running) { msg($("#resultMsg"), `Đang chạy: ${r.step || "…"}`, "warn"); await new Promise((ok) => setTimeout(ok, 1500)); continue; }
       if (r.status === "error") {
@@ -345,7 +345,7 @@ function findBaseline(run) {
 }
 async function loadHistory() {
   try {
-    const h = await api("/api/history");
+    const h = await api("/api/tune/history");
     state.history = h;
     if (!h.length) return;
     $("#histBox").classList.remove("hidden");
@@ -381,9 +381,9 @@ function openConfirm() {
 async function applyLive() {
   $("#confirm").close();
   try {
-    const r = await api("/api/apply", { method: "POST", body: JSON.stringify({ params: state.values }) });
+    const r = await api("/api/tune/apply", { method: "POST", body: JSON.stringify({ params: state.values }) });
     msg($("#topMsg"), r.message, r.reloaded ? "ok" : "warn");
-    const s = await api("/api/schema"); state.schema.live = s.live; syncInputs(); refreshLive(); loadHistory();
+    const s = await api("/api/tune/schema"); state.schema.live = s.live; syncInputs(); refreshLive(); loadHistory();
   } catch (e) { msg($("#topMsg"), e.message); }
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -396,7 +396,7 @@ async function init() {
     document.querySelectorAll("#ranges .chip").forEach((c) => c.setAttribute("aria-pressed", "false"))));
   setRange("all");
   try {
-    state.schema = await api("/api/schema");
+    state.schema = await api("/api/tune/schema");
   } catch (e) { msg($("#topMsg"), `Không tải được tham số: ${e.message}`); return; }
   $("#subtitle").textContent = `${state.schema.strategy} · BTC/USDT 15m`;
   state.values = { ...state.schema.lab };
@@ -411,7 +411,7 @@ async function init() {
   $("#btnLive").addEventListener("click", () => { state.values = { ...state.schema.live }; syncInputs(); });
   refreshLive(); setInterval(refreshLive, 30000);
   await loadHistory();
-  const r = await api("/api/backtest").catch(() => null);
+  const r = await api("/api/tune/backtest").catch(() => null);
   if (r && r.running) { $("#resultBox").classList.remove("hidden"); poll(); }
   else if (r && r.status === "error") { $("#resultBox").classList.remove("hidden"); msg($("#resultMsg"), r.message || "Backtest lỗi"); }
   else if (r && r.last) { state.lastRun = r.last; $("#resultBox").classList.remove("hidden"); renderResult(r.last); }

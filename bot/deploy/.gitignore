@@ -1,5 +1,6 @@
 secrets/
 tuner.json
+hub.json
 .env
 BOT_LOGIN.md
 DEMO_CHECK.md

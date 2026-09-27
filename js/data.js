@@ -179,6 +179,80 @@ export async function testConnection(market, apiBase) {
   return { ok: Array.isArray(rows) && rows.length > 0, ms: Math.round(performance.now() - t0), via };
 }
 
+// ---------------------------------------------------------------- Máy chủ nhà (hub)
+// App chạy trên hub (bot/hub) thì hub có sẵn nến, tự cập nhật: tải qua mạng nhà/Tailscale nhanh hơn nhiều so với
+// gọi Binance từ điện thoại. Trên Vercel/host tĩnh /api/hub không có → hubInfo() = null, app chạy như cũ.
+let hubp = null;
+export function hubInfo(refresh = false) {
+  if (refresh) hubp = null;
+  const onWeb = typeof location !== "undefined" && /^https?:$/.test(location.protocol);
+  hubp ??= onWeb
+    ? fetch(`${location.origin}/api/hub`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null)).then((j) => (j?.hub ? j : null)).catch(() => null)
+    : Promise.resolve(null);
+  return hubp;
+}
+
+/** Bộ dữ liệu hub có sẵn (đã có nến) khớp market/coin/khung, hoặc null. */
+export async function hubDataset(market, symbol, tf) {
+  const h = await hubInfo();
+  if (!h?.features?.data) return null;
+  return h.datasets.find((d) => d.market === market && d.symbol === symbol.toUpperCase() && d.tf === tf && d.count > 0) || null;
+}
+
+const HUB_CHUNK = 100000;
+
+async function hubFetch(url, signal) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const r = await fetch(url, { signal, cache: "no-store" });
+      if (!r.ok) throw new Error(`home server HTTP ${r.status}`);
+      return r;
+    } catch (e) {
+      if (e.name === "AbortError" || attempt >= 4) throw e;
+      if (isHidden()) await whenVisible(signal); else await sleep(1000 * (attempt + 1));
+    }
+  }
+}
+
+async function downloadFromHub({ market, symbol, tf, from, onProgress, signal }, hd) {
+  const id = datasetId(market, symbol, tf);
+  const ms = TF_MS[tf];
+  let saved = await loadDataset(id);
+  let start = saved ? saved.meta.last + ms : Math.floor(from / ms) * ms;
+  if (saved && from < saved.meta.first && hd.first < saved.meta.first) {  // lùi ngày bắt đầu → tải lại từ đầu
+    start = Math.floor(from / ms) * ms;
+    saved = null;
+  }
+  const parts = [];
+  let rows = 0;
+  const total = Math.max(1, Math.ceil((hd.last - Math.max(start, hd.first)) / ms / HUB_CHUNK) + 1);
+  for (let done = 0; ; ) {
+    const r = await hubFetch(`${location.origin}/api/data/${market}/${symbol.toUpperCase()}/${tf}?start=${start}&limit=${HUB_CHUNK}`, signal);
+    const a = new Float64Array(await r.arrayBuffer());
+    if (a.length) { parts.push(a); rows += a.length / 6; start = a[a.length - 6] + ms; }
+    onProgress?.({ done: ++done, total: Math.max(total, done), phase: "home server" });
+    if (r.headers.get("x-more") !== "1" || !a.length) break;
+  }
+  const cols = Object.fromEntries(COLS.map((k) => [k, new Float64Array(rows)]));
+  let off = 0;
+  for (const a of parts) {
+    for (let i = 0; i < a.length; i += 6, off++) COLS.forEach((k, j) => { cols[k][off] = a[i + j]; });
+  }
+  const meta = { id, market, symbol: symbol.toUpperCase(), tf };
+  const candles = mergeCandles(saved, cols);
+  let funding = saved?.funding || [];
+  if (MARKETS[market].funding && candles.t.length) {
+    const since = funding.length ? funding[funding.length - 1].t + 1 : candles.t[0];
+    const r = await hubFetch(`${location.origin}/api/data/${market}/${symbol.toUpperCase()}/funding?start=${since}`, signal);
+    const end = candles.t[candles.t.length - 1];
+    funding = funding.concat((await r.json()).filter((f) => f.t >= candles.t[0] && f.t <= end)
+      .map((f) => ({ t: f.t, rate: f.rate, mark: f.mark > 0 ? f.mark : openAt(candles, f.t) })));
+  }
+  await saveDataset({ ...meta, funding, chunks: saved?.meta.chunks }, candles);
+  return { id, added: rows, count: candles.t.length, via: "home server" };
+}
+
 const CHECKPOINT = 50; // lưu tạm sau mỗi ~50 yêu cầu (50k nến): app bị iOS đóng hẳn thì lần sau tải tiếp
 
 /** Ghép nến mới (cols) vào bộ đã có; cols bắt đầu sau nến cuối thì nối, còn lại thay hẳn. */
@@ -200,6 +274,10 @@ function mergeCandles(prev, cols) {
  * onProgress({done, total, phase}); phase "paused" khi đang chờ mở lại app.
  */
 export async function download({ market, symbol, tf, from, apiBase, onProgress, signal }) {
+  if (!apiBase) {
+    const hd = await hubDataset(market, symbol, tf);
+    if (hd) return downloadFromHub({ market, symbol, tf, from, onProgress, signal }, hd);
+  }
   const m = MARKETS[market];
   const { base } = await resolveBase(market, apiBase, signal);
   const id = datasetId(market, symbol, tf);
@@ -250,15 +328,18 @@ export async function download({ market, symbol, tf, from, apiBase, onProgress, 
   return { id, added, count: candles.t.length };
 }
 
+/** Giá mở cửa của nến chứa thời điểm t — thay cho markPrice khi nguồn không có. */
+function openAt(candles, t) {
+  let lo = 0, hi = candles.t.length - 1;
+  while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (candles.t[mid] <= t) lo = mid; else hi = mid - 1; }
+  return candles.o[lo];
+}
+
 async function downloadFunding(m, base, symbol, candles, have, onProgress, signal) {
   const out = have.slice();
   let start = out.length ? out[out.length - 1].t + 1 : candles.t[0];
   const end = candles.t[candles.t.length - 1];
-  const close = (t) => { // giá gần mốc funding, dùng khi Binance không trả markPrice
-    let lo = 0, hi = candles.t.length - 1;
-    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (candles.t[mid] <= t) lo = mid; else hi = mid - 1; }
-    return candles.o[lo];
-  };
+  const close = (t) => openAt(candles, t);
   let n = 0;
   while (start <= end) {
     const rows = await getJson(`${base}${m.funding}?symbol=${symbol}&startTime=${start}&limit=1000`, signal,

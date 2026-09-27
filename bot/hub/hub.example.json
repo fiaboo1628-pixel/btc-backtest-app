@@ -1,0 +1,34 @@
+{
+  "strategy": "DonchianRevert",
+  "hub": {
+    "host": "127.0.0.1",
+    "port": 8090,
+    "username": "admin",
+    "password": "doi-mat-khau-manh",
+    "trust_tailscale": true,
+    "allowed_logins": []
+  },
+  "app_dir": "../..",
+  "exchange_file": "../deploy/secrets/exchange.json",
+  "data": {
+    "dir": "../user_data/hub_data",
+    "update_every_s": 120,
+    "datasets": [
+      { "market": "futures", "symbol": "BTCUSDT", "tf": "1m", "from": "2021-01-01" },
+      { "market": "futures", "symbol": "BTCUSDT", "tf": "5m", "from": "2021-01-01" },
+      { "market": "futures", "symbol": "BTCUSDT", "tf": "15m", "from": "2021-01-01" }
+    ]
+  },
+  "lab": {
+    "api_url": "http://127.0.0.1:8081",
+    "username": "trung-voi-api_server-cua-lab",
+    "password": "trung-voi-api_server-cua-lab",
+    "strategy_dir": "../user_data/strategies_lab"
+  },
+  "live": {
+    "api_url": "http://127.0.0.1:8080",
+    "username": "trung-voi-api_server-cua-live",
+    "password": "trung-voi-api_server-cua-live",
+    "strategy_dir": "../user_data/strategies"
+  }
+}
