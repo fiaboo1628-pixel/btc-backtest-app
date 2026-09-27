@@ -15,7 +15,7 @@ Backtest (01/2021 → 09/2026, Bitstamp BTC/USD, --timeframe-detail 1m, phí 0.0
   +84.9% tổng, ~11.3%/năm, max drawdown 15.1%, profit factor 1.24, 6/6 năm có lãi.
 
 Mọi ngưỡng ở trên là tham số: giá trị mặc định nằm trong code, và có thể ghi đè bằng file
-DonchianRevert.json đặt cạnh file này (trang "Chỉnh tham số" trong thư mục tuner/ ghi file đó).
+DonchianRevert.json đặt cạnh file này (trang "Chỉnh tham số" của hub — bot/hub/tune.py — ghi file đó).
 
 KHÔNG phải lời khuyên đầu tư. Hãy chạy dry-run trước khi dùng tiền thật.
 """

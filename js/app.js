@@ -3,6 +3,8 @@ import { CATALOG, CATALOG_BY_ID, paramsWithDefaults } from "./catalog.js";
 import { OPS } from "./rules.js";
 import { TF_MS, TF_LIST, resample } from "./timeframes.js";
 import { DEFAULT_EXIT, DEFAULT_ACCOUNT } from "./engine.js";
+import { createLive } from "./live.js";
+import { toBotParams } from "./botparams.js";
 
 // Initialize Vercel Web Analytics
 // thống kê truy cập (Vercel Analytics): tải không bắt buộc — lỗi/offline thì bỏ qua, app vẫn chạy
@@ -39,7 +41,7 @@ const state = {
 };
 
 // ============================================================== tabs
-const TABS = ["data", "strategy", "result"];
+const TABS = ["data", "strategy", "result"];            // + "live" khi chạy trên hub
 let currentTab = "data";
 const tabScroll = {};
 function showTab(name) {
@@ -55,6 +57,7 @@ function showTab(name) {
     if (on) { void s.offsetWidth; s.classList.add(`in-${dir}`); } // chạy lại hiệu ứng trượt
   });
   document.querySelectorAll(".tabbar [data-tab]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.tab === name));
+  if (name === "live") state.live?.start(); else state.live?.stop();
   window.scrollTo({ top: tabScroll[name] || 0, behavior: "instant" });
 }
 
@@ -191,7 +194,7 @@ function normalize(s) {
   };
 }
 function saved() { return store.get("strategies", {}); }
-function persistCurrent() { store.set("currentStrategy", state.strategy); }
+function persistCurrent() { store.set("currentStrategy", state.strategy); refreshBotFit(); }
 
 function refreshPick() {
   const mine = saved();
@@ -323,7 +326,7 @@ async function runBacktest() {
   btn.disabled = false; label.textContent = "Run";
   if (!res.ok) { toast(res.error, "err"); return; }
   toast("");
-  state.lastRun = { replay: res.replay, range: res.range, tf: s.tradeTf, wallet: s.account?.wallet ?? 1000 };
+  state.lastRun = { replay: res.replay, range: res.range, tf: s.tradeTf, wallet: s.account?.wallet ?? 1000, key: JSON.stringify(s) };
   renderResult(res, performance.now() - t0);
 }
 
@@ -417,6 +420,63 @@ async function openReplayView() {
   R.openReplay({ bars, trades: run.replay, wallet: run.wallet, tfMs: TF_MS[run.tf], fmt, sign });
 }
 
+// ============================================================== hub (máy chủ nhà)
+// Chạy trên hub (bot/hub): nến lấy từ máy chủ, thêm tab Live và nút gửi tham số sang bot.
+async function setupHub() {
+  const h = await Data.hubInfo();
+  if (!h) return;
+  state.hub = h;
+  const f = h.features || {};
+  if (f.data) {
+    const sets = h.datasets.filter((d) => d.count > 0);
+    const hint = $("#hubHint");
+    hint.hidden = !sets.length;
+    hint.textContent = `Home server has ${sets.map((d) => `${d.symbol} ${d.tf}`).join(", ")} ready — Download copies it from there in seconds.`;
+  }
+  if (f.live) {
+    TABS.push("live");
+    $(".tabbar [data-tab=live]").hidden = false;
+    state.live = createLive({ root: $("#liveBox"), esc, fmt, sign, cls });
+  }
+  if (f.tune) {
+    $("#botCard").hidden = false;
+    refreshBotFit();
+  }
+}
+
+function refreshBotFit() {
+  if (!state.hub?.features?.tune) return;
+  let msg = "";
+  try { toBotParams(state.strategy); } catch (e) { msg = `Can't send this strategy: ${e.message}.`; }
+  $("#botFit").textContent = msg;
+  $("#btnSendBot").disabled = !!msg;
+}
+
+async function sendToBot() {
+  let params;
+  try { ({ params } = toBotParams(state.strategy)); } catch (e) { toast(e.message, "err"); return; }
+  let live = null;
+  try { live = (await (await fetch("/api/tune/schema", { cache: "no-store" })).json()).live; } catch { /* vẫn cho gửi */ }
+  const changes = Object.entries(params).filter(([k, v]) => !live || live[k] !== v)
+    .map(([k, v]) => `${k}: ${live ? `${live[k]} → ` : ""}${v}`);
+  if (!changes.length) { toast("The bot already runs these values.", "ok"); return; }
+  const tested = state.lastRun?.key === JSON.stringify(state.strategy) ? ""
+    : "\n\n⚠ You haven't backtested exactly these values yet (tap Run first).";
+  if (!confirm(`Send to the bot?\n\n${changes.join("\n")}${tested}`)) return;
+  const btn = $("#btnSendBot"); btn.disabled = true;
+  try {
+    const r = await fetch("/api/tune/apply", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ params }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.detail || `HTTP ${r.status}`);
+    toast(j.reloaded ? "Sent. The bot reloaded with the new values." : j.message, j.reloaded ? "ok" : "warn");
+  } catch (e) {
+    toast(`Send failed: ${e.message}`, "err");
+  } finally {
+    btn.disabled = false; refreshBotFit();
+  }
+}
+
 // ============================================================== init
 async function init() {
   document.querySelectorAll(".tabbar [data-tab]").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
@@ -506,6 +566,9 @@ async function init() {
     try { loadStrategy(JSON.parse(await f.text())); toast("Imported."); } catch (err) { toast(`Invalid file: ${err.message}`, "err"); }
     e.target.value = "";
   });
+
+  $("#btnSendBot").addEventListener("click", sendToBot);
+  setupHub();
 
   await refreshDatasets();
   if (state.activeId) await useDataset(state.activeId).catch(() => refreshDatasets());

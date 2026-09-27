@@ -13,3 +13,14 @@ jobs:
         with:
           node-version: 22
       - run: npm test
+  hub:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install fastapi uvicorn httpx pytest
+      - run: python -m pytest bot/hub/test_hub.py -q

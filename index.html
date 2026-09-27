@@ -58,6 +58,7 @@
       </div>
       <p class="hint" id="tfHelp"></p>
       <p class="hint" id="dlHint"></p>
+      <p class="hint up" id="hubHint" hidden></p>
       <div class="progress hidden" id="dlProg"><i></i></div>
       <p class="hint" id="dlStatus"></p>
       <div class="row">
@@ -125,6 +126,16 @@
       <h2>Exit &amp; risk</h2>
       <div class="grid2" id="exitFields"></div>
     </div>
+
+    <div class="card" id="botCard" hidden>
+      <h2>Bot</h2>
+      <p class="hint">Send these thresholds to the running DonchianRevert bot. Only the numbers change — the bot's logic stays the same. Open trades keep their stop.</p>
+      <p class="hint warn" id="botFit"></p>
+      <div class="row">
+        <button class="btn primary grow" id="btnSendBot" type="button">Send to bot</button>
+        <a class="btn" href="/tune/" id="lnkTune">Tune in freqtrade</a>
+      </div>
+    </div>
   </section>
 
   <!-- ============================== RESULTS -->
@@ -172,6 +183,10 @@
       </div>
     </div>
   </section>
+  <!-- ============================== LIVE (chỉ khi chạy trên hub) -->
+  <section class="tab" id="tab-live" hidden>
+    <div id="liveBox"></div>
+  </section>
 </main>
 
 <!-- ============================== REPLAY (như Visual mode của MT5) -->
@@ -213,6 +228,10 @@
     <button type="button" data-tab="result">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16M6 16l4-5 3 3 5-7"/></svg>
       <span>Results</span>
+    </button>
+    <button type="button" data-tab="live" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-5 4 10 2-5h6"/></svg>
+      <span>Live</span>
     </button>
     <button type="button" class="run" id="btnRun">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10-6.5z"/></svg>

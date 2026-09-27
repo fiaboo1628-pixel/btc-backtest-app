@@ -1,6 +1,6 @@
 # Bộ paper trading (dry-run) cho DonchianRevert — xem README.md cùng thư mục.
 #   docker compose run --rm setup     # lần đầu: tạo mật khẩu, tải dữ liệu
-#   docker compose up -d              # chạy bot dry-run + LAB + trang Chỉnh tham số
+#   docker compose up -d              # chạy bot + LAB + hub (app, tab Live, Chỉnh tham số) ở cổng 8090
 # Mọi cổng chỉ mở trên 127.0.0.1 của máy; truy cập từ xa qua Tailscale (README).
 
 x-ft: &ft
@@ -31,16 +31,17 @@ services:
       --logfile /freqtrade/user_data/logs/lab.log
       -c /deploy/config.base.json -c /deploy/config.lab.json -c /deploy/secrets/lab.json
 
-  tuner:
+  hub:                                      # app backtest + tab Live + Chỉnh tham số + nến trên máy chủ, cổng 8090
     <<: *ft
-    container_name: donchian-tuner
-    ports: ["127.0.0.1:8090:8090"]          # trang Chỉnh tham số
+    container_name: donchian-hub
+    ports: ["127.0.0.1:8090:8090"]
     volumes:
       - "../user_data:/freqtrade/user_data"
       - "./:/deploy"
-      - "../tuner:/tuner:ro"
-    entrypoint: ["python", "/tuner/server.py"]
-    command: ["-c", "/deploy/tuner.json"]
+      - "../hub:/hub:ro"
+      - "../..:/app:ro"                       # mã app; hub chỉ phục vụ index.html, js/, css/... (xem hub/server.py)
+    entrypoint: ["python", "/hub/server.py"]
+    command: ["-c", "/deploy/hub.json"]
     depends_on: [live, lab]
 
   setup:

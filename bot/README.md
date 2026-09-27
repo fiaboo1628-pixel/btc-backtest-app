@@ -40,10 +40,10 @@ TP cố định 1:4 không trailing +55%, DD 22%, 2 năm lỗ · 1:5 +121% nhưn
 - Donchian được chọn sau khi xem kết quả 2025–2026 → chưa có dữ liệu kiểm tra sạch.
 - Lợi thế mỏng. **Hãy dry-run 1–2 tháng trước khi dùng tiền thật. Không phải lời khuyên đầu tư.**
 
-## Trang "Chỉnh tham số" (thư mục `tuner/`)
+## Hub (thư mục `hub/`)
 Tất cả ngưỡng của chiến lược là tham số freqtrade (mặc định trong code, ghi đè bằng `DonchianRevert.json`).
-`tuner/` là trang web tiếng Việt cho điện thoại để chỉnh tham số, backtest ngay và áp dụng cho bot live.
-Xem `tuner/README.md`.
+`hub/` là server một cổng trên máy nhà: app backtest + nến trên máy chủ, tab Live, nút "Send to bot" và trang
+Chỉnh tham số (`/tune/`). Xem `hub/README.md`.
 
 ## Chạy lại backtest offline
 ```bash

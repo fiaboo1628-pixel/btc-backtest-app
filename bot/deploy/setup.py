@@ -7,7 +7,7 @@ Chuẩn bị lần đầu cho bộ dry-run. Chạy trong container (không cần
 
 Việc làm:
   - secrets/live.json, secrets/lab.json: user/mật khẩu API ngẫu nhiên cho bot dry-run và LAB
-  - tuner.json: cấu hình trang "Chỉnh tham số" (mật khẩu đăng nhập in ra màn hình)
+  - hub.json: cấu hình hub — app backtest, tab Live, Chỉnh tham số, nến trên máy chủ (thay cho tuner.json cũ)
   - chép chiến lược sang user_data/strategies_lab/ cho LAB
   - tải nến 15m BTC/USDT:USDT futures từ 2021 (kèm funding) để LAB backtest được
   - --api: cho bot vào lệnh thật trên sàn bằng API key (hỏi Demo hay Thật; key không hiện lên màn hình).
@@ -42,6 +42,36 @@ def api_creds(user: str) -> dict:
 
 def write_json(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+
+HUB_DATASETS = [{"market": "futures", "symbol": "BTCUSDT", "tf": tf, "from": "2021-01-01"} for tf in ("1m", "5m", "15m")]
+
+
+def write_hub(creds: dict) -> dict:
+    """Tạo hub.json (hoặc nâng cấp tuner.json cũ); giữ mật khẩu đã có, chỉ thêm phần còn thiếu."""
+    hub, old = DEPLOY / "hub.json", DEPLOY / "tuner.json"
+    src = hub if hub.exists() else old if old.exists() else None
+    cfg = json.loads(src.read_text(encoding="utf-8")) if src else {}
+    h = cfg.setdefault("hub", cfg.pop("tuner", {}))
+    h.setdefault("host", "0.0.0.0")
+    h.setdefault("port", 8090)
+    h.setdefault("username", "admin")
+    h.setdefault("password", rand(12))
+    h.setdefault("trust_tailscale", True)             # qua `tailscale serve`: Tailscale đã xác thực, khỏi mật khẩu
+    h.setdefault("allowed_logins", [])
+    cfg.setdefault("strategy", "DonchianRevert")
+    cfg.setdefault("app_dir", "/app")
+    cfg.setdefault("exchange_file", "/deploy/secrets/exchange.json")
+    cfg.setdefault("data", {"dir": str(USER_DATA / "hub_data"), "update_every_s": 120, "datasets": HUB_DATASETS})
+    cfg.setdefault("lab", {"api_url": "http://lab:8081", **_login(creds["lab"]),
+                           "strategy_dir": str(USER_DATA / "strategies_lab")})
+    cfg.setdefault("live", {"api_url": "http://live:8080", **_login(creds["live"]),
+                            "strategy_dir": str(USER_DATA / "strategies")})
+    write_json(hub, cfg)
+    if src == old:
+        old.unlink()
+        print("Chuyển tuner.json → hub.json")
+    return cfg
 
 
 def main() -> None:
@@ -82,19 +112,8 @@ def main() -> None:
         print("Đã chuyển về dry-run. Chạy: docker compose up -d")
         return
 
-    tuner = DEPLOY / "tuner.json"
-    if not tuner.exists():
-        password = rand(12)
-        write_json(tuner, {
-            "strategy": "DonchianRevert",
-            "tuner": {"host": "0.0.0.0", "port": 8090, "username": "admin", "password": password},
-            "lab": {"api_url": "http://lab:8081", **_login(creds["lab"]),
-                    "strategy_dir": str(USER_DATA / "strategies_lab")},
-            "live": {"api_url": "http://live:8080", **_login(creds["live"]),
-                     "strategy_dir": str(USER_DATA / "strategies")},
-        })
-    t = json.loads(tuner.read_text(encoding="utf-8"))["tuner"]
-    print(f"\nĐăng nhập trang Chỉnh tham số:  {t['username']} / {t['password']}")
+    t = write_hub(creds)["hub"]
+    print(f"\nĐăng nhập hub (app + Live + Chỉnh tham số) khi không đi qua Tailscale:  {t['username']} / {t['password']}")
     live = creds["live"]["api_server"]
     print(f"Đăng nhập FreqUI (bot dry-run): {live['username']} / {live['password']}")
     print("(Xem lại bất cứ lúc nào: chạy lại lệnh setup với --no-download)")
@@ -112,6 +131,7 @@ def main() -> None:
         subprocess.run([
             "freqtrade", "download-data", "--userdir", str(USER_DATA),
             "-c", str(DEPLOY / "config.base.json"), "-c", str(DEPLOY / "config.lab.json"),
+            "-c", str(SECRETS / "lab.json"),
             "--timerange", args.timerange, "--timeframes", "15m",
         ], check=True)
     print("\nXong. Tiếp theo: docker compose up -d")

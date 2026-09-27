@@ -74,7 +74,7 @@ Repo này gom toàn bộ dự án. Trước đây bot nằm ở repo `bot_trade`
 | Phần | Trạng thái |
 |---|---|
 | **App backtest** (thư mục gốc, Vercel) | Chạy ổn trên iPhone. Engine khớp freqtrade từng lệnh; khớp lệnh chính xác bằng nến 1m (`detail`); chốt lời theo R; giao diện kết quả mới; **Replay** xem lại từng lệnh như MT5 |
-| **Bot** (`bot/`) | Chiến lược DonchianRevert BTC M15 + bộ Docker: dry-run → Binance Demo → tiền thật, chỉ đổi API key (`setup --api`). Trang Chỉnh tham số (`bot/tuner`). Codespaces tự bật bot |
+| **Bot** (`bot/`) | Chiến lược DonchianRevert BTC M15 + bộ Docker: dry-run → Binance Demo → tiền thật, chỉ đổi API key (`setup --api`). **Hub** (`bot/hub`): một trang trên máy chủ nhà qua Tailscale — app backtest với nến có sẵn trên máy chủ, tab **Live** theo dõi bot, nút **Send to bot**, Chỉnh tham số ở `/tune/`. Codespaces tự bật bot |
 | **Nghiên cứu** (`bot/research/`) | Xem bên dưới |
 
 ### Kết luận nghiên cứu

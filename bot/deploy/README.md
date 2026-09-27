@@ -7,7 +7,7 @@ Gồm 3 phần, chạy bằng Docker (Windows, Mac, Linux đều được):
 |---|---|---|
 | `live` | 8080 | Bot dry-run + FreqUI (xem lệnh, lãi lỗ, biểu đồ) |
 | `lab` | 8081 | freqtrade webserver cho trang Chỉnh tham số backtest |
-| `tuner` | 8090 | Trang "Chỉnh tham số": backtest thử, áp dụng tham số cho bot dry-run |
+| `hub` | 8090 | **Một trang cho tất cả**: app backtest (nến lấy từ máy chủ, tự cập nhật), tab **Live** theo dõi bot, nút **Send to bot**, trang Chỉnh tham số ở `/tune/` |
 
 Mọi cổng chỉ mở trên `127.0.0.1` của máy. Xem từ điện thoại khi ra ngoài: dùng Tailscale (bước 5).
 
@@ -44,20 +44,23 @@ docker compose up -d
 ```
 Mở trên chính máy đó:
 - http://localhost:8080 — FreqUI, đăng nhập `ft-live` / mật khẩu ở bước 3
-- http://localhost:8090 — trang Chỉnh tham số, đăng nhập `admin` / mật khẩu ở bước 3
+- http://localhost:8090 — hub (app backtest + tab Live + `/tune/`), đăng nhập `admin` / mật khẩu ở bước 3.
+  Lần đầu hub tải nến BTC 1m/5m/15m từ 2021 về máy (~15–20 phút, chạy nền), sau đó tự cập nhật mỗi 2 phút.
 
 Bot tự khởi động lại khi máy khởi động lại (miễn là Docker tự chạy). **Tắt chế độ ngủ (sleep) của máy.**
 
 ## 5. Xem từ iPhone khi ra ngoài (Tailscale)
 1. Cài Tailscale trên máy nhà và trên iPhone, đăng nhập cùng một tài khoản.
-2. Trên máy nhà:
+2. Trên máy nhà (một lần; `sudo tailscale set --operator=$USER` để lần sau khỏi sudo):
    ```bash
-   tailscale serve --bg --https=443  http://127.0.0.1:8090
-   tailscale serve --bg --https=8443 http://127.0.0.1:8080
+   sudo tailscale serve --bg --https=443  http://127.0.0.1:8090
+   sudo tailscale serve --bg --https=8443 http://127.0.0.1:8080    # FreqUI, nếu cần
    ```
-3. Trên iPhone (bật Tailscale): mở `https://<tên-máy>.<tailnet>.ts.net` (trang Chỉnh tham số) và
-   `https://<tên-máy>.<tailnet>.ts.net:8443` (FreqUI). Tên chính xác xem bằng `tailscale status`
-   hoặc trong app Tailscale. Chỉ thiết bị trong tailnet của bạn mở được, không lộ ra internet.
+3. Trên PC hoặc iPhone (bật Tailscale): mở `https://<tên-máy>.<tailnet>.ts.net` → app backtest, tab **Live**,
+   `/tune/`. **Không phải nhập mật khẩu**: Tailscale đã xác thực bạn (hub đọc header `Tailscale-User-Login`;
+   muốn giới hạn tài khoản thì điền `allowed_logins` trong `hub.json`). Trên iPhone: Safari → Chia sẻ →
+   **Thêm vào MH chính** để dùng như app. Tên máy xem bằng `tailscale status`.
+   Chỉ thiết bị trong tailnet của bạn mở được, không lộ ra internet.
 
 ## 6. Vào lệnh trên sàn bằng API (Demo → Thật)
 Dry-run chỉ giả lập lệnh bên trong freqtrade. Chế độ **API** cho bot đặt lệnh thật lên Binance, thấy lệnh,
@@ -116,7 +119,7 @@ Tài khoản miễn phí có khoảng 60 giờ/tháng với máy 2 nhân.
    **Không cần gõ lệnh**: codespace tự cài Docker, tạo mật khẩu và bật bot dry-run (2–3 phút).
 3. Mở file **`bot/deploy/BOT_LOGIN.md`** (tự mở sẵn; nếu thấy "đang cài" thì đợi rồi mở lại
    từ cây thư mục bên trái). File ghi: kết nối Binance OK hay bị chặn, và 2 mật khẩu đăng nhập.
-4. Tab **Ports**: dòng **8080** (FreqUI) hoặc **8090** (Chỉnh tham số) → bấm biểu tượng quả địa cầu.
+4. Tab **Ports**: dòng **8080** (FreqUI) hoặc **8090** (hub: app + Live + Chỉnh tham số) → bấm biểu tượng quả địa cầu.
    Link chỉ tài khoản GitHub của bạn mở được (để Private, đừng đổi sang Public).
 5. **Chạy trên Binance Demo không cần gõ phím** (hợp khi dùng điện thoại): key Demo đặt trong *Codespaces secrets*.
    - github.com/settings/codespaces → **Codespaces secrets** → **New secret**, tạo 2 secret, chọn repo này ở
@@ -152,7 +155,7 @@ git pull && docker compose pull && docker compose up -d   # cập nhật code + 
   backtest cùng khoảng thời gian (giá vào, SL, lúc kích hoạt trailing) hơn là chỉ nhìn lãi/lỗ.
 
 ## Ghi chú
-- `secrets/`, `tuner.json`, `.env` chứa mật khẩu/key, đã có trong `.gitignore`. Không chia sẻ.
+- `secrets/`, `hub.json`, `.env` chứa mật khẩu/key, đã có trong `.gitignore`. Không chia sẻ.
 - Dữ liệu lệnh dry-run nằm ở `../user_data/dryrun.sqlite`; xoá file này để làm lại từ đầu với ví 1000 USDT.
 - Linux báo lỗi quyền ghi: `sudo chown -R 1000:1000 ../user_data .`
 - Mạng chặn Binance (lỗi 451/403 trong log): thử mạng khác hoặc VPN; không dùng máy chủ đặt ở Mỹ.

@@ -1,22 +1,14 @@
 """
-Trang "Chỉnh tham số" cho DonchianRevert — chạy cùng môi trường Python với freqtrade.
+Chỉnh tham số DonchianRevert (trước là trang "tuner" riêng): backtest thử trên LAB, áp dụng cho LIVE.
 
-Kiến trúc:
-    trình duyệt ──► tuner (file này, 127.0.0.1:8090, có mật khẩu)
-                     ├─► LAB : freqtrade webserver  — backtest với tham số đang thử
-                     └─► LIVE: freqtrade trade      — ghi tham số + reload_config
+    LAB : freqtrade webserver — backtest với tham số đang thử (thư mục strategies_lab/)
+    LIVE: freqtrade trade     — ghi tham số + reload_config (thư mục strategies/, luôn sao lưu bản cũ)
 
-LAB và LIVE dùng HAI thư mục chiến lược khác nhau. Tuner chỉ ghi vào thư mục LIVE khi bạn
-bấm "Áp dụng" (và luôn sao lưu file cũ trước khi ghi).
-
-Chạy:
-    python tuner/server.py -c tuner/tuner.json
+Mọi đường dẫn nằm dưới /api/tune/ của hub.
 """
-import argparse
 import asyncio
 import importlib.util
 import json
-import secrets
 import shutil
 import sys
 from datetime import datetime, timezone
@@ -24,13 +16,8 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-import uvicorn
-from fastapi import Depends, FastAPI, HTTPException
-from fastapi.responses import FileResponse
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-
-HERE = Path(__file__).resolve().parent
 
 # Nhãn tiếng Việt cho từng tham số. Tham số nào không có ở đây vẫn hiện, với tên gốc.
 LABELS: dict[str, tuple[str, str]] = {
@@ -50,16 +37,6 @@ LABELS: dict[str, tuple[str, str]] = {
     "max_lev": ("Đòn bẩy tối đa", "Giới hạn đòn bẩy khi tính khối lượng theo rủi ro."),
 }
 SPACE_TITLES = {"buy": "Vào lệnh", "sell": "Thoát lệnh & rủi ro"}
-
-
-# ----------------------------------------------------------------------------- cấu hình
-def load_cfg(path: Path) -> dict:
-    cfg = json.loads(path.read_text(encoding="utf-8"))
-    base = path.parent
-    for side in ("lab", "live"):
-        d = Path(cfg[side]["strategy_dir"])
-        cfg[side]["strategy_dir"] = d if d.is_absolute() else (base / d).resolve()
-    return cfg
 
 
 def load_schema(strategy_file: Path, class_name: str) -> list[dict]:
@@ -194,7 +171,7 @@ def summarize(res: dict, strategy: str) -> dict:
     }
 
 
-# ----------------------------------------------------------------------------- app
+# ----------------------------------------------------------------------------- router
 class ParamsIn(BaseModel):
     params: dict[str, Any]
 
@@ -204,7 +181,7 @@ class BacktestIn(ParamsIn):
     wallet: float = 1000
 
 
-def create_app(cfg: dict) -> FastAPI:
+def router(cfg: dict) -> APIRouter:
     strat = cfg["strategy"]
     lab_dir: Path = cfg["lab"]["strategy_dir"]
     live_dir: Path = cfg["live"]["strategy_dir"]
@@ -212,21 +189,9 @@ def create_app(cfg: dict) -> FastAPI:
     lab, live = FtClient(cfg["lab"]), FtClient(cfg["live"])
     state: dict[str, Any] = {"pending": None, "history": [], "failed": False}
     lock = asyncio.Lock()
+    r = APIRouter(prefix="/api/tune")
 
-    app = FastAPI(title="Tuner", docs_url=None, redoc_url=None, openapi_url=None)
-    security = HTTPBasic()
-
-    def auth(c: HTTPBasicCredentials = Depends(security)):
-        ok_u = secrets.compare_digest(c.username.encode(), cfg["tuner"]["username"].encode())
-        ok_p = secrets.compare_digest(c.password.encode(), cfg["tuner"]["password"].encode())
-        if not (ok_u and ok_p):
-            raise HTTPException(401, "Sai mật khẩu", headers={"WWW-Authenticate": "Basic"})
-
-    @app.get("/", dependencies=[Depends(auth)])
-    async def index():
-        return FileResponse(HERE / "static" / "index.html")
-
-    @app.get("/api/schema", dependencies=[Depends(auth)])
+    @r.get("/schema")
     async def get_schema():
         return {
             "strategy": strat,
@@ -236,7 +201,7 @@ def create_app(cfg: dict) -> FastAPI:
             "live": read_params(schema, live_dir, strat),
         }
 
-    @app.post("/api/backtest", dependencies=[Depends(auth)])
+    @r.post("/backtest")
     async def start_backtest(body: BacktestIn):
         grouped = validate(schema, body.params)
         async with lock:
@@ -254,7 +219,7 @@ def create_app(cfg: dict) -> FastAPI:
             state["failed"] = False
         return {"ok": True}
 
-    @app.get("/api/backtest", dependencies=[Depends(auth)])
+    @r.get("/backtest")
     async def poll_backtest():
         r = await lab.call("GET", "/backtest")
         out = {"status": r["status"], "running": r["running"], "progress": r.get("progress"),
@@ -274,13 +239,13 @@ def create_app(cfg: dict) -> FastAPI:
             out["last"] = state["history"][0]
         return out
 
-    @app.get("/api/history", dependencies=[Depends(auth)])
+    @r.get("/history")
     async def history():
         return [{k: v for k, v in h.items() if k != "result"} | {
             "result": {k: v for k, v in h["result"].items() if k != "equity"}}
             for h in state["history"]]
 
-    @app.post("/api/apply", dependencies=[Depends(auth)])
+    @r.post("/apply")
     async def apply_live(body: ParamsIn):
         grouped = validate(schema, body.params)
         f = write_params(grouped, live_dir, strat, backup=True)
@@ -292,7 +257,7 @@ def create_app(cfg: dict) -> FastAPI:
             msg = f"Đã ghi {f.name} nhưng KHÔNG nạp lại được bot: {getattr(e, 'detail', e)}"
         return {"ok": True, "reloaded": reloaded, "message": msg}
 
-    @app.get("/api/live", dependencies=[Depends(auth)])
+    @r.get("/live")
     async def live_status():
         try:
             conf, trades, profit = await asyncio.gather(
@@ -311,17 +276,4 @@ def create_app(cfg: dict) -> FastAPI:
             "stake_currency": conf.get("stake_currency"),
         }
 
-    return app
-
-
-def main() -> None:
-    ap = argparse.ArgumentParser(description="Trang chỉnh tham số DonchianRevert")
-    ap.add_argument("-c", "--config", default=str(HERE / "tuner.json"))
-    args = ap.parse_args()
-    cfg = load_cfg(Path(args.config))
-    t = cfg["tuner"]
-    uvicorn.run(create_app(cfg), host=t.get("host", "127.0.0.1"), port=int(t.get("port", 8090)))
-
-
-if __name__ == "__main__":
-    main()
+    return r
