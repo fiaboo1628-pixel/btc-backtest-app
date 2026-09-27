@@ -26,14 +26,28 @@ def trade_view(t: dict) -> dict:
     return out
 
 
-def mode_of(dry_run: bool | None, exchange_file: Path) -> str:
-    if dry_run:
-        return "paper"
+def disk_demo(exchange_file: Path) -> bool | None:
     try:
-        demo = json.loads(exchange_file.read_text(encoding="utf-8")).get("exchange", {}).get("demo_trading")
+        return bool(json.loads(exchange_file.read_text(encoding="utf-8")).get("exchange", {}).get("demo_trading"))
     except (OSError, ValueError):
-        demo = None
-    return "demo" if demo else "live"
+        return None
+
+
+def mode_of(conf: dict, exchange_file: Path) -> tuple[str, str | None]:
+    """Chế độ của process bot ĐANG CHẠY (/show_config), không phải file trên đĩa — setup --api ghi đè file
+    ngay, còn bot cũ vẫn chạy tới lần `up -d` sau. Trả thêm cảnh báo khi file trên đĩa khác bot đang chạy."""
+    if conf.get("dry_run"):
+        return "paper", None
+    demo = conf.get("demo_trading")
+    if demo is None:                                   # freqtrade cũ không trả demo_trading: đành đọc file
+        demo = disk_demo(exchange_file)
+        return ("demo" if demo else "live"), None
+    mode = "demo" if demo else "live"
+    on_disk = disk_demo(exchange_file)
+    if on_disk is not None and on_disk != bool(demo):
+        return mode, (f"Bot đang chạy {'Demo' if demo else 'TIỀN THẬT'} nhưng cấu hình trên đĩa là "
+                      f"{'Demo' if on_disk else 'TIỀN THẬT'} — cần `docker compose up -d` để áp dụng")
+    return mode, None
 
 
 def router(cfg: dict) -> APIRouter:
@@ -61,9 +75,11 @@ def router(cfg: dict) -> APIRouter:
         closed.sort(key=lambda t: t.get("close_timestamp") or 0, reverse=True)
         logs = [{"t": row[1], "level": row[3], "msg": row[4][:300]}
                 for row in (ok("logs") or {}).get("logs", []) if row[3] in ("WARNING", "ERROR", "CRITICAL")]
+        mode, mode_warning = mode_of(conf, exchange_file)
         return {
             "reachable": True,
-            "mode": mode_of(conf.get("dry_run"), exchange_file),
+            "mode": mode,
+            "mode_warning": mode_warning,
             "state": conf.get("state"),
             "strategy": conf.get("strategy"),
             "timeframe": conf.get("timeframe"),

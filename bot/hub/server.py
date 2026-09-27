@@ -10,6 +10,8 @@ Hub: một cổng duy nhất trên máy chủ nhà cho cả hệ thống, mở q
 
 Đăng nhập: qua `tailscale serve` thì Tailscale đã xác thực người dùng (header Tailscale-User-Login),
 không phải gõ mật khẩu; truy cập kiểu khác (localhost, SSH tunnel) thì hỏi mật khẩu trong hub.json.
+Header đó ai cũng tự gắn được, nên chỉ tin khi request tới từ phía `tailscale serve` (loopback, hoặc gateway
+của Docker khi hub chạy trong container) — container khác cùng mạng Docker không giả được.
 
     python hub/server.py -c hub.json
 """
@@ -17,6 +19,7 @@ import argparse
 import asyncio
 import base64
 import contextlib
+import ipaddress
 import json
 import logging
 import secrets
@@ -58,10 +61,51 @@ def load_cfg(path: Path) -> dict:
     return cfg
 
 
-def check_auth(request: Request, h: dict) -> str | None:
+def default_gateway() -> str | None:
+    """Gateway mặc định (Linux). Trong container Docker, `tailscale serve` → 127.0.0.1:8090 của máy tới hub
+    qua docker-proxy, nên địa chỉ nguồn là gateway của mạng Docker."""
+    try:
+        for line in Path("/proc/net/route").read_text().splitlines()[1:]:
+            f = line.split()
+            if len(f) > 2 and f[1] == "00000000":
+                return str(ipaddress.IPv4Address(bytes.fromhex(f[2])[::-1]))
+    except (OSError, ValueError):
+        pass
+    return None
+
+
+def tailscale_proxies(h: dict) -> list:
+    """Nơi được phép gửi header Tailscale-User-Login: `tailscale_proxies` trong hub.json, mặc định loopback + gateway."""
+    nets = h.get("tailscale_proxies")
+    if nets is None:
+        nets = ["127.0.0.0/8", "::1"] + ([gw] if (gw := default_gateway()) else [])
+    return [ipaddress.ip_network(n, strict=False) for n in nets]
+
+
+def from_proxy(request: Request, proxies: list) -> bool:
+    try:
+        ip = ipaddress.ip_address(request.client.host if request.client else "")
+    except ValueError:
+        return False
+    return any(ip in n for n in proxies)
+
+
+def same_origin(request: Request) -> bool:
+    """Chặn trang web khác (trình duyệt tự gửi kèm đăng nhập) gọi các API ghi — ví dụ đổi tham số bot LIVE."""
+    site = request.headers.get("sec-fetch-site")
+    if site:
+        return site in ("same-origin", "none")
+    origin = request.headers.get("origin")
+    if not origin:
+        return True                                            # không phải trình duyệt (curl, script)
+    hosts = {request.headers.get("host"), request.headers.get("x-forwarded-host")}
+    return origin.split("://", 1)[-1] in hosts
+
+
+def check_auth(request: Request, h: dict, proxies: list | None = None) -> str | None:
     """Trả về tên người dùng nếu được phép, None nếu không."""
     login = request.headers.get("tailscale-user-login")
-    if login and h.get("trust_tailscale", True):
+    if login and h.get("trust_tailscale", True) and from_proxy(request, proxies or []):
         allowed = h.get("allowed_logins") or []
         if not allowed or login in allowed:
             return login
@@ -83,6 +127,9 @@ def create_app(cfg: dict) -> FastAPI:
     app_dir = Path(cfg.get("app_dir", HERE.parent.parent)).resolve()
     features = {"data": False, "live": False, "tune": False}
     store = None
+    proxies = tailscale_proxies(h)
+    if h.get("trust_tailscale", True) and not h.get("allowed_logins"):
+        log.warning("allowed_logins trống: mọi tài khoản Tailscale thấy được máy này đều vào được hub")
 
     @contextlib.asynccontextmanager
     async def lifespan(_app):
@@ -96,10 +143,12 @@ def create_app(cfg: dict) -> FastAPI:
 
     @app.middleware("http")
     async def auth_mw(request: Request, call_next):
-        user = check_auth(request, h)
+        user = check_auth(request, h, proxies)
         if user is None:
             return JSONResponse({"detail": "Cần đăng nhập"}, status_code=401,
                                 headers={"WWW-Authenticate": 'Basic realm="hub"'})
+        if request.method not in ("GET", "HEAD", "OPTIONS") and not same_origin(request):
+            return JSONResponse({"detail": "Chặn yêu cầu từ trang khác"}, status_code=403)
         request.state.user = user
         return await call_next(request)
 

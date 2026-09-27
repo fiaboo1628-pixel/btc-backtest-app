@@ -114,7 +114,8 @@ export function backtest(c, sig, atr, opts = {}) {
       const r = atr[i - 1] * ex.rAtr;
       const rPct = r / o;
       const risk = acc.riskPct / 100;
-      const lev = Math.min(Math.max(risk / rPct, 1), acc.maxLev);
+      // đòn bẩy nguyên, làm tròn lên: Binance làm tròn xuống đòn bẩy lẻ (thiếu ký quỹ), notional không đổi
+      const lev = Math.min(Math.max(Math.ceil(risk / rPct - 1e-9), 1), acc.maxLev);
       const equity = (acc.wallet + closedPnl) * acc.tradableRatio;
       const stake = Math.min(equity * risk / rPct / lev, equity);
       const amount = floorStep((stake / o) * lev, acc.amountStep);

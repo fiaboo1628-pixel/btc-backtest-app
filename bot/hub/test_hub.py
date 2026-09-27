@@ -19,14 +19,14 @@ BASIC = {"authorization": "Basic " + base64.b64encode(b"admin:pw").decode()}
 TS = {"tailscale-user-login": "me@example.com"}
 
 
-def make_app(tmp_path, **extra):
+def make_app(tmp_path, client="127.0.0.1", **extra):
     cfg = {"strategy": "DonchianRevert",
            "hub": {"username": "admin", "password": "pw", "trust_tailscale": True},
            "app_dir": str(REPO),
            "data": {"dir": str(tmp_path / "data"), "datasets": [
                {"market": "futures", "symbol": "BTCUSDT", "tf": "15m", "from": "2024-01-01"}]},
            **extra}
-    return TestClient(server.create_app(cfg))
+    return TestClient(server.create_app(cfg), client=(client, 50000))
 
 
 def test_auth(tmp_path):
@@ -41,6 +41,34 @@ def test_allowed_logins(tmp_path):
     c = make_app(tmp_path, hub={"password": "pw", "allowed_logins": ["boss@x.com"]})
     assert c.get("/api/hub", headers=TS).status_code == 401
     assert c.get("/api/hub", headers={"tailscale-user-login": "boss@x.com"}).status_code == 200
+
+
+def test_tailscale_header_only_from_proxy(tmp_path):
+    """Container khác trong mạng Docker (hay bất kỳ ai tới thẳng cổng 8090) không giả được header Tailscale."""
+    c = make_app(tmp_path, client="172.18.0.5", hub={"password": "pw", "tailscale_proxies": ["172.18.0.1"]})
+    assert c.get("/api/hub", headers=TS).status_code == 401
+    assert c.get("/api/hub", headers=BASIC).status_code == 200
+    c = make_app(tmp_path, client="172.18.0.1", hub={"password": "pw", "tailscale_proxies": ["172.18.0.1"]})
+    assert c.get("/api/hub", headers=TS).status_code == 200
+
+
+def test_default_gateway_parsing(tmp_path, monkeypatch):
+    route = "Iface Destination Gateway\neth0 000012AC 00000000\neth0 00000000 010012AC\n"
+    real = server.Path.read_text
+    monkeypatch.setattr(server.Path, "read_text",
+                        lambda self, *a, **k: route if str(self) == "/proc/net/route" else real(self, *a, **k))
+    assert server.default_gateway() == "172.18.0.1"
+
+
+def test_cross_site_write_blocked(tmp_path):
+    c = make_app(tmp_path)
+    h = {**TS, "content-type": "application/json"}
+    assert c.post("/api/tune/apply", json={}, headers={**h, "sec-fetch-site": "cross-site"}).status_code == 403
+    assert c.post("/api/tune/apply", json={}, headers={**h, "origin": "https://evil.example"}).status_code == 403
+    # cùng trang: qua được bước chặn (405 vì bản thử này không bật Chỉnh tham số)
+    assert c.post("/api/tune/apply", json={}, headers={**h, "sec-fetch-site": "same-origin"}).status_code == 405
+    assert c.post("/api/tune/apply", json={}, headers={**h, "origin": "http://testserver"}).status_code == 405
+    assert c.get("/api/hub", headers={**TS, "sec-fetch-site": "cross-site"}).status_code == 200
 
 
 def test_tailscale_can_be_disabled(tmp_path):
@@ -159,6 +187,35 @@ def test_live_summary(tmp_path, monkeypatch):
     assert [t["trade_id"] for t in j["closed"]] == [2, 1]
     assert j["logs"] == [{"t": 2, "level": "WARNING", "msg": "careful"}]
     assert "SECRET" not in json.dumps(j)
+
+
+def test_live_mode_from_running_bot(tmp_path):
+    """Chế độ lấy từ bot đang chạy; file trên đĩa khác thì cảnh báo (setup --api vừa đổi, chưa up -d)."""
+    import live
+    ex = tmp_path / "exchange.json"
+    ex.write_text(json.dumps({"exchange": {"demo_trading": True}}))
+    assert live.mode_of({"dry_run": True}, ex) == ("paper", None)
+    mode, warn = live.mode_of({"dry_run": False, "demo_trading": False}, ex)
+    assert mode == "live" and "TIỀN THẬT" in warn
+    assert live.mode_of({"dry_run": False, "demo_trading": True}, ex) == ("demo", None)
+    assert live.mode_of({"dry_run": False}, ex) == ("demo", None)          # freqtrade cũ: đọc file
+
+
+def test_validate_keeps_live_values_and_rejects_off_step():
+    """Send to bot gửi một phần: phần còn lại giữ giá trị đang chạy; giá trị lệch bước bị từ chối, không làm tròn."""
+    schema = [
+        {"name": "fixed_lev", "space": "sell", "label": "fixed", "type": "bool", "default": False},
+        {"name": "r_atr", "space": "sell", "label": "R", "type": "decimal", "min": 1.0, "max": 6.0, "decimals": 1,
+         "default": 3.0},
+        {"name": "adx_min", "space": "buy", "label": "ADX", "type": "int", "min": 10, "max": 50, "default": 30},
+    ]
+    g = tune.validate(schema, {"r_atr": 2.5}, base={"fixed_lev": True, "adx_min": 25})
+    assert g == {"sell": {"fixed_lev": True, "r_atr": 2.5}, "buy": {"adx_min": 25}}
+    for bad in ({"r_atr": 2.25}, {"adx_min": 30.5}):
+        with pytest.raises(tune.HTTPException) as e:
+            tune.validate(schema, bad)
+        assert e.value.status_code == 400
+    assert tune.validate(schema, {"r_atr": 2.2000000000000002})["sell"]["r_atr"] == 2.2
 
 
 def test_live_unreachable(tmp_path, monkeypatch):

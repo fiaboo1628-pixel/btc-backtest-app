@@ -19,6 +19,7 @@ DonchianRevert.json đặt cạnh file này (trang "Chỉnh tham số" của hub
 
 KHÔNG phải lời khuyên đầu tư. Hãy chạy dry-run trước khi dùng tiền thật.
 """
+import math
 from datetime import datetime
 
 import talib.abstract as ta
@@ -108,8 +109,10 @@ class DonchianRevert(IStrategy):
         if self.fixed_lev.value:
             return float(min(self.max_lev.value, max_leverage))
         r_pct = self._signal_atr(pair, current_time) * self.r_atr.value / current_rate
-        need = self.risk_pct.value / 100 / r_pct
-        return float(min(max(need, 1.0), self.max_lev.value, max_leverage))
+        # Đòn bẩy nguyên, làm tròn LÊN: Binance làm tròn xuống đòn bẩy lẻ (floor_leverage), khi đó ký quỹ
+        # cần > vốn và sàn từ chối lệnh. Notional = stake × leverage không đổi nên rủi ro vẫn đúng 1R.
+        need = math.ceil(self.risk_pct.value / 100 / r_pct - 1e-9)
+        return float(min(max(need, 1), self.max_lev.value, math.floor(max_leverage)))
 
     def custom_stake_amount(self, pair, current_time, current_rate, proposed_stake, min_stake,
                             max_stake, leverage, entry_tag, side, **kwargs) -> float:

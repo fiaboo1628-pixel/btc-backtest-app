@@ -210,6 +210,7 @@ body.replaying .tabbar { transform: translateY(110%); }
 .replay { position: fixed; inset: 0; z-index: 20; background: var(--bg); display: flex; flex-direction: column;
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
 .replay[hidden] { display: none; }
+.card.offline[hidden] { display: none; }
 .rp-top { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--line); }
 .rp-hud { flex: 1; display: grid; grid-template-columns: 1fr 1.4fr .8fr; gap: 6px; }
 .rp-hud div { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 5px 9px; display: grid; min-width: 0; }

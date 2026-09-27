@@ -72,15 +72,18 @@ def load_schema(strategy_file: Path, class_name: str) -> list[dict]:
 
 
 # ----------------------------------------------------------------------------- tham số
-def validate(schema: list[dict], values: dict[str, Any]) -> dict[str, dict]:
-    """Kiểm tra giá trị nằm trong giới hạn; trả về {space: {name: value}}."""
+def validate(schema: list[dict], values: dict[str, Any], base: dict[str, Any] | None = None) -> dict[str, dict]:
+    """Kiểm tra giá trị nằm trong giới hạn và đúng bước; trả về {space: {name: value}}.
+    Tham số không gửi lấy từ `base` (giá trị đang chạy), không phải mặc định trong code — gửi một phần
+    không được lặng lẽ đặt lại các tham số khác. Giá trị lệch bước thì báo lỗi, không tự làm tròn."""
     by_name = {s["name"]: s for s in schema}
     unknown = set(values) - set(by_name)
     if unknown:
         raise HTTPException(400, f"Tham số không tồn tại: {', '.join(sorted(unknown))}")
+    base = base or {}
     grouped: dict[str, dict] = {}
     for name, s in by_name.items():
-        v = values.get(name, s["default"])
+        v = values.get(name, base.get(name, s["default"]))
         if s["type"] == "bool":
             if not isinstance(v, bool):
                 raise HTTPException(400, f"{s['label']}: phải là bật/tắt")
@@ -91,7 +94,11 @@ def validate(schema: list[dict], values: dict[str, Any]) -> dict[str, dict]:
                 raise HTTPException(400, f"{s['label']}: không phải số") from None
             if not s["min"] <= v <= s["max"]:
                 raise HTTPException(400, f"{s['label']}: phải trong khoảng {s['min']}–{s['max']}")
-            v = int(round(v)) if s["type"] == "int" else round(v, s["decimals"])
+            r = int(round(v)) if s["type"] == "int" else round(v, s["decimals"])
+            if abs(r - v) > 1e-9:
+                step = "số nguyên" if s["type"] == "int" else f"tối đa {s['decimals']} chữ số thập phân"
+                raise HTTPException(400, f"{s['label']}: {v:g} không hợp lệ, bot nhận {step}")
+            v = r
         grouped.setdefault(s["space"], {})[name] = v
     return grouped
 
@@ -203,7 +210,7 @@ def router(cfg: dict) -> APIRouter:
 
     @r.post("/backtest")
     async def start_backtest(body: BacktestIn):
-        grouped = validate(schema, body.params)
+        grouped = validate(schema, body.params, base=read_params(schema, lab_dir, strat))
         async with lock:
             cur = await lab.call("GET", "/backtest")
             if cur.get("running"):
@@ -247,7 +254,7 @@ def router(cfg: dict) -> APIRouter:
 
     @r.post("/apply")
     async def apply_live(body: ParamsIn):
-        grouped = validate(schema, body.params)
+        grouped = validate(schema, body.params, base=read_params(schema, live_dir, strat))
         f = write_params(grouped, live_dir, strat, backup=True)
         try:
             await live.call("POST", "/reload_config")
