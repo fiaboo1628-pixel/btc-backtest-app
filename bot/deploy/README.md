@@ -144,8 +144,11 @@ docker compose ps                    # trạng thái
 docker compose logs -f live          # log bot dry-run
 docker compose restart live          # khởi động lại bot
 docker compose down                  # dừng tất cả
-git pull && docker compose pull && docker compose up -d   # cập nhật code + freqtrade
+git pull && docker compose up -d     # cập nhật code (freqtrade giữ nguyên phiên bản ghim)
 ```
+
+Nâng cấp freqtrade: đổi tag `image:` trong `docker-compose.yml`, chạy trên **Demo** trước
+(`docker compose up -d` rồi `docker compose run --rm check`), đạt hết mới chuyển sang tiền thật.
 
 ## Khác gì so với backtest
 - Vào/ra lệnh bằng **lệnh market** ngay khi nến tín hiệu đóng (backtest vào ở giá mở nến sau — gần như nhau).

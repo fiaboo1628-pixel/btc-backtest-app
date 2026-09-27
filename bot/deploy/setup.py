@@ -23,6 +23,7 @@ import json
 import os
 import secrets
 import shutil
+import sqlite3
 import subprocess
 from pathlib import Path
 
@@ -103,6 +104,8 @@ def main() -> None:
         write_json(SECRETS / "live.json", creds["live"])
         print("Bật Telegram cho bot dry-run")
 
+    if args.api or args.demo_from_env or args.dryrun:
+        guard_open_trades(interactive=not args.demo_from_env)
     if args.api:
         set_api()
     elif args.demo_from_env:
@@ -135,6 +138,47 @@ def main() -> None:
             "--timerange", args.timerange, "--timeframes", "15m",
         ], check=True)
     print("\nXong. Tiếp theo: docker compose up -d")
+
+
+def current_db() -> str:
+    """BOT_DB bot đang dùng theo .env (không có .env = dry-run)."""
+    env = DEPLOY / ".env"
+    if env.exists():
+        for line in env.read_text(encoding="utf-8").splitlines():
+            if line.startswith("BOT_DB="):
+                return line.split("=", 1)[1].strip()
+    return "dryrun"
+
+
+def open_trades(db: str) -> list[tuple]:
+    f = USER_DATA / f"{db}.sqlite"
+    if not f.exists():
+        return []
+    con = sqlite3.connect(f"file:{f}?mode=ro", uri=True)
+    try:
+        return con.execute("SELECT id, pair, is_short, open_date FROM trades WHERE is_open = 1").fetchall()
+    except sqlite3.Error:
+        return []
+    finally:
+        con.close()
+
+
+def guard_open_trades(interactive: bool) -> None:
+    """Đổi chế độ/tài khoản khi bot đang có lệnh trên sàn thì bot mới mở DB khác và không còn quản lý lệnh đó
+    (không dời trailing, không chốt lời; chỉ còn lệnh stop cũ trên sàn). Chặn lại, trừ khi gõ xác nhận."""
+    db = current_db()
+    if db == "dryrun":
+        return                                             # lệnh giả, không có gì trên sàn
+    trades = open_trades(db)
+    if not trades:
+        return
+    print(f"\n!! Bot ({db}) đang có {len(trades)} lệnh mở trên sàn:")
+    for tid, pair, short, opened in trades:
+        print(f"   #{tid} {pair} {'Short' if short else 'Long'} từ {opened}")
+    print("Đổi chế độ bây giờ thì bot sẽ KHÔNG còn quản lý các lệnh này (không dời trailing stop, không chốt lời).\n"
+          "Nên đóng lệnh trong FreqUI / tab Live trước (forceexit), rồi chạy lại.")
+    if not interactive or input('Vẫn đổi? Gõ đúng chữ BO LENH để tiếp tục: ').strip() != "BO LENH":
+        raise SystemExit("Huỷ, không đổi gì.")
 
 
 def ask(prompt: str, choices: dict[str, str]) -> str:

@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { toBotParams, BOT_LIMITS } from "../js/botparams.js";
+import { toBotParams, BOT_LIMITS, BOT_DECIMALS } from "../js/botparams.js";
 import { DEFAULT_EXIT, DEFAULT_ACCOUNT } from "../js/engine.js";
 
 const preset = (f) => JSON.parse(readFileSync(new URL(`../presets/${f}`, import.meta.url)));
@@ -56,6 +56,8 @@ test("không khớp khuôn thì báo lý do", () => {
     [(s) => { s.exit.trailDistR = 3; }, /trail_dist_r from 0.1 to 2/],
     [(s) => { s.account.maxLev = 20; }, /max_lev from 1 to 10/],
     [(s) => { s.long[0].params.n = 20.5; s.short[0].params.n = 20.5; }, /whole number for dc_period/],
+    [(s) => { s.long[0].value = 0.0745; }, /dc_long with at most 3 decimals/],
+    [(s) => { s.exit.rAtr = 2.25; }, /r_atr with at most 1 decimals/],
   ];
   for (const [mut, re] of bad) {
     const s = clone(base); mut(s);
@@ -72,5 +74,15 @@ test("giới hạn trong app khớp giới hạn trong DonchianRevert.py", () =>
     const m = py.match(new RegExp(`${k} = \\w+Parameter\\(([^,]+), ([^,]+),`));
     assert.ok(m, k);
     assert.deepEqual([Number(m[1]), Number(m[2])], [lo, hi], k);
+  }
+});
+
+test("số chữ số thập phân trong app khớp DonchianRevert.py", () => {
+  const py = readFileSync(new URL("../bot/user_data/strategies/DonchianRevert.py", import.meta.url), "utf8");
+  for (const [k, dec] of Object.entries(BOT_DECIMALS)) {
+    const m = py.match(new RegExp(`${k} = (\\w+)Parameter\\(.*?(?:decimals=(\\d+))?[,)]`));
+    assert.ok(m, k);
+    const d = py.match(new RegExp(`${k} = DecimalParameter\\(.*decimals=(\\d+)`));
+    assert.equal(d ? Number(d[1]) : 0, dec, k);
   }
 });

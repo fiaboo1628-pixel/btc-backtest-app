@@ -62,3 +62,14 @@ test("TP cố định và tắt trailing", () => {
   assert.equal(tr.exit, 112);
   assert.equal(tr.exitT, k.t[2]);
 });
+
+test("đòn bẩy nguyên, làm tròn lên (Binance làm tròn xuống đòn bẩy lẻ) — khối lượng vẫn đúng 1R", () => {
+  // giá 100, ATR 0.1 × rAtr 3 → R = 0.3% giá; rủi ro 1% → cần đòn bẩy 3.33 → 4
+  const n = 10, k = { t: [], o: [], h: [], l: [], c: [] };
+  for (let i = 0; i < n; i++) { k.t.push(i * 15 * M); k.o.push(100); k.h.push(100.05); k.l.push(99.95); k.c.push(100); }
+  const sig = new Int8Array(n); sig[1] = 1;
+  const atr = new Float64Array(n).fill(0.1);
+  const t = backtest(k, sig, atr, { account: { ...acc, amountStep: 0.0001 } }).trades[0];
+  assert.equal(t.leverage, 4);
+  assert.ok(Math.abs(t.amount * 100 - 1000 / 0.3) < 1, `notional ${t.amount * 100}`);   // notional = vốn × 1% / R%
+});

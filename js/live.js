@@ -9,7 +9,7 @@ const MODE = {
 };
 
 export function createLive({ root, esc, fmt, sign, cls }) {
-  let timer = null, busy = false, lastOk = 0;
+  let timer = null, busy = false, lastOk = 0, failSince = 0;
   const ago = (ms) => {
     const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
     return s < 90 ? `${s}s ago` : s < 5400 ? `${Math.round(s / 60)} min ago` : `${fmt(s / 3600, 1)} h ago`;
@@ -60,6 +60,8 @@ export function createLive({ root, esc, fmt, sign, cls }) {
       </details></div>` : "";
 
     root.innerHTML = `
+      <div class="card offline" hidden><p class="hint warn"></p></div>
+      ${j.mode_warning ? `<div class="card"><p class="hint warn">${esc(j.mode_warning)}</p></div>` : ""}
       <div class="card hero">
         <div class="hero-top">
           <div>
@@ -97,9 +99,20 @@ export function createLive({ root, esc, fmt, sign, cls }) {
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const j = await r.json();
       lastOk = Date.now();
+      failSince = 0;
       render(j);
     } catch (e) {
       if (!lastOk) root.innerHTML = `<div class="card"><p class="hint warn">Can't reach the home server: ${esc(e.message)}</p></div>`;
+      else {
+        // giữ số liệu cũ nhưng nói rõ là cũ — không để "updated 0s ago" / "running" đứng yên khi mất kết nối
+        failSince ||= Date.now();
+        const box = root.querySelector(".offline");
+        if (box) {
+          box.hidden = false;
+          box.querySelector("p").textContent =
+            `Can't reach the home server since ${new Date(failSince).toLocaleTimeString()} (${e.message}). Numbers below are from ${ago(lastOk)}.`;
+        }
+      }
     } finally {
       busy = false;
     }

@@ -20,7 +20,11 @@ export const BOT_LIMITS = {
   atr_min_pct: [0, 1.5], r_atr: [1, 6], trail_start_r: [0.5, 5], trail_dist_r: [0.1, 2], tp_r: [0, 10],
   risk_pct: [0.1, 3], max_lev: [1, 10],
 };
-const INT_PARAMS = new Set(["dc_period", "adx_min", "max_lev"]);
+// số chữ số thập phân bot nhận (decimals= trong DonchianRevert.py; 0 = số nguyên) — hub báo lỗi nếu lệch, không tự làm tròn
+export const BOT_DECIMALS = {
+  dc_period: 0, dc_long: 3, dc_short: 3, adx_min: 0, vol_max: 2, atr_min_pct: 2, r_atr: 1,
+  trail_start_r: 1, trail_dist_r: 1, tp_r: 1, risk_pct: 2, max_lev: 0,
+};
 
 function readSide(conds, side, tradeTf) {
   const out = {};
@@ -74,7 +78,10 @@ export function toBotParams(s, botTf = "15m") {
     if (v === undefined || (typeof v === "number" && !Number.isFinite(v))) throw new Error(`Missing value for ${k}`);
     const lim = BOT_LIMITS[k];
     if (lim && (v < lim[0] || v > lim[1])) throw new Error(`the bot accepts ${k} from ${lim[0]} to ${lim[1]} (now ${v})`);
-    if (INT_PARAMS.has(k) && !Number.isInteger(v)) throw new Error(`the bot needs a whole number for ${k} (now ${v})`);
+    const dec = BOT_DECIMALS[k];
+    if (dec !== undefined && Math.abs(+v.toFixed(dec) - v) > 1e-9) {
+      throw new Error(dec ? `the bot takes ${k} with at most ${dec} decimals (now ${v})` : `the bot needs a whole number for ${k} (now ${v})`);
+    }
   }
   return { params };
 }

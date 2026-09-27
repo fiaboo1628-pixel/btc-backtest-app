@@ -4,7 +4,9 @@
 # Mọi cổng chỉ mở trên 127.0.0.1 của máy; truy cập từ xa qua Tailscale (README).
 
 x-ft: &ft
-  image: freqtradeorg/freqtrade:stable
+  # Ghim phiên bản: bot đặt lệnh tiền thật trên engine này, và chế độ Demo dựa vào ghi đè _ft_has nội bộ.
+  # Nâng cấp: đổi tag → docker compose up -d → chạy Demo + `docker compose run --rm check` → rồi mới dùng tiền thật.
+  image: freqtradeorg/freqtrade:2026.8
   restart: unless-stopped
   volumes:
     - "../user_data:/freqtrade/user_data"

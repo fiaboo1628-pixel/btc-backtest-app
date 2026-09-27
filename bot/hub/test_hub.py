@@ -189,6 +189,35 @@ def test_live_summary(tmp_path, monkeypatch):
     assert "SECRET" not in json.dumps(j)
 
 
+def test_live_mode_from_running_bot(tmp_path):
+    """Chế độ lấy từ bot đang chạy; file trên đĩa khác thì cảnh báo (setup --api vừa đổi, chưa up -d)."""
+    import live
+    ex = tmp_path / "exchange.json"
+    ex.write_text(json.dumps({"exchange": {"demo_trading": True}}))
+    assert live.mode_of({"dry_run": True}, ex) == ("paper", None)
+    mode, warn = live.mode_of({"dry_run": False, "demo_trading": False}, ex)
+    assert mode == "live" and "TIỀN THẬT" in warn
+    assert live.mode_of({"dry_run": False, "demo_trading": True}, ex) == ("demo", None)
+    assert live.mode_of({"dry_run": False}, ex) == ("demo", None)          # freqtrade cũ: đọc file
+
+
+def test_validate_keeps_live_values_and_rejects_off_step():
+    """Send to bot gửi một phần: phần còn lại giữ giá trị đang chạy; giá trị lệch bước bị từ chối, không làm tròn."""
+    schema = [
+        {"name": "fixed_lev", "space": "sell", "label": "fixed", "type": "bool", "default": False},
+        {"name": "r_atr", "space": "sell", "label": "R", "type": "decimal", "min": 1.0, "max": 6.0, "decimals": 1,
+         "default": 3.0},
+        {"name": "adx_min", "space": "buy", "label": "ADX", "type": "int", "min": 10, "max": 50, "default": 30},
+    ]
+    g = tune.validate(schema, {"r_atr": 2.5}, base={"fixed_lev": True, "adx_min": 25})
+    assert g == {"sell": {"fixed_lev": True, "r_atr": 2.5}, "buy": {"adx_min": 25}}
+    for bad in ({"r_atr": 2.25}, {"adx_min": 30.5}):
+        with pytest.raises(tune.HTTPException) as e:
+            tune.validate(schema, bad)
+        assert e.value.status_code == 400
+    assert tune.validate(schema, {"r_atr": 2.2000000000000002})["sell"]["r_atr"] == 2.2
+
+
 def test_live_unreachable(tmp_path, monkeypatch):
     async def boom(self, method, path, **kw):
         raise tune.HTTPException(502, "down")
