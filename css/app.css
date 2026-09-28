@@ -160,7 +160,7 @@ svg.eq { width: 100%; height: 170px; display: block; margin: 12px 0 4px; }
 .dot { background: var(--muted); }
 .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .x-stop_loss { background: var(--down); } .x-trailing { background: var(--up); } .x-take_profit { background: var(--accent); }
-.x-time { background: var(--warn); } .x-end { background: var(--muted); }
+.x-time { background: var(--warn); } .x-exit_signal { background: var(--accent2, #8b7cf6); } .x-end { background: var(--muted); }
 .trades { display: grid; }
 .tr { display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); }
 .tr:first-child { border-top: 0; }

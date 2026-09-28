@@ -73,3 +73,24 @@ test("đòn bẩy nguyên, làm tròn lên (Binance làm tròn xuống đòn b�
   assert.equal(t.leverage, 4);
   assert.ok(Math.abs(t.amount * 100 - 1000 / 0.3) < 1, `notional ${t.amount * 100}`);   // notional = vốn × 1% / R%
 });
+
+test("thoát theo kênh: Long đóng dưới đáy N nến trước → thoát ở giá mở nến sau", () => {
+  const k = { t: [], o: [], h: [], l: [], c: [] };
+  const push = (o, h, l, c) => { k.t.push(k.t.length * 15 * M); k.o.push(o); k.h.push(h); k.l.push(l); k.c.push(c); };
+  for (let i = 0; i < 5; i++) push(100, 101, 99, 100);   // 0–4
+  push(100, 102, 99.5, 101);                               // 5: vào Long ở 100 (tín hiệu ở nến 4)
+  push(101, 101.5, 100, 100.5);                            // 6
+  push(100.5, 100.8, 98.5, 98.8);                          // 7: đóng 98.8 < đáy 3 nến trước (99.5, 100 → min 99) → tín hiệu thoát
+  push(98.7, 99, 98, 98.5);                                // 8: thoát ở giá mở 98.7
+  push(98.5, 99, 98, 98.5);
+  const sig = new Int8Array(k.t.length); sig[4] = 1;
+  const atr = new Float64Array(k.t.length).fill(1);       // stop = 100 − 3 = 97, không chạm
+  const r = backtest(k, sig, atr, { account: acc, exit: { rAtr: 3, trailStartR: 0, exitChannel: 3 } });
+  assert.equal(r.trades.length, 1);
+  assert.equal(r.trades[0].reason, "exit_signal");
+  assert.equal(r.trades[0].exitT, k.t[8]);
+  assert.equal(r.trades[0].exit, 98.7);
+  // tắt thoát theo kênh → lệnh giữ tới cuối dữ liệu
+  const off = backtest(k, sig, atr, { account: acc, exit: { rAtr: 3, trailStartR: 0 } });
+  assert.equal(off.trades[0].reason, "end");
+});

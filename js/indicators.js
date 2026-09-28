@@ -175,6 +175,14 @@ export function donchianPos(h, l, c, n) {
   return out;
 }
 
+/** Vị trí giá đóng cửa so với kênh Donchian của N nến TRƯỚC (không tính nến hiện tại):
+ *  >1 = đóng trên đỉnh N nến trước (breakout lên), <0 = đóng dưới đáy (breakout xuống). */
+export function donchianBreak(h, l, c, n) {
+  const hh = rollingMax(h, n), ll = rollingMin(l, n), out = nanArray(c.length);
+  for (let i = n; i < c.length; i++) out[i] = (c[i] - ll[i - 1]) / (hh[i - 1] - ll[i - 1]);
+  return out;
+}
+
 export function stoch(h, l, c, fastK = 5, slowK = 3, slowD = 3) {
   const hh = rollingMax(h, fastK), ll = rollingMin(l, fastK), raw = nanArray(c.length);
   for (let i = fastK - 1; i < c.length; i++) {

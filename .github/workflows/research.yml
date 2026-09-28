@@ -1,5 +1,5 @@
 # Nghiên cứu nhiều coin với dữ liệu Binance Futures thật (data.binance.vision).
-# Cài freqtrade bằng pip (có sẵn wheel TA-Lib). Chạy khi đẩy lên nhánh claude/** hoặc research/** có sửa bot/research/ hay chiến lược; hoặc bấm Run workflow.
+# Cài freqtrade bằng pip (có sẵn wheel TA-Lib). Chạy khi đẩy lên nhánh claude/** hoặc research/** có sửa multi_coin, binance_vision hay DonchianRevert; hoặc bấm Run workflow.
 name: research
 
 on:
@@ -16,7 +16,8 @@ on:
         default: "{}"
   push:
     branches: ["claude/**", "research/**"]
-    paths: ["bot/research/**", "bot/user_data/strategies/**", "bot/run_futures.py", ".github/workflows/research.yml"]
+    paths: ["bot/research/multi_coin.py", "bot/research/binance_vision.py", "bot/user_data/strategies/DonchianRevert.py",
+            "bot/run_futures.py", ".github/workflows/research.yml"]
 
 jobs:
   multi-coin:

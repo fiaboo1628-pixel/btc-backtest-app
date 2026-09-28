@@ -65,6 +65,8 @@ export function toBotParams(s, botTf = "15m") {
   if (S && S.dpos.n !== L.dpos.n) throw new Error("Long and Short must use the same Donchian length");
   const ex = s.exit || {}, acc = s.account || {};
   if (ex.maxHoldBars > 0) throw new Error("The bot has no time exit: set Max hold to 0");
+  if (ex.exitChannel > 0) throw new Error("The bot has no channel exit: set Channel exit to 0");
+  if ((ex.atrN ?? 14) !== 14) throw new Error("The bot measures R with ATR(14): set ATR bars to 14");
 
   const params = {
     dc_period: L.dpos.n, dc_long: L.dpos.value, adx_min: L.adx_min, vol_max: L.vol_max, atr_min_pct: L.atr_min_pct,

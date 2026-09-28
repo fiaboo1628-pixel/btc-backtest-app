@@ -50,3 +50,12 @@ test("MACD", () => {
   same("macd", m.line, ref.macd); same("macdsig", m.signal, ref.macdsig); same("macdhist", m.hist, ref.macdhist);
 });
 test("ROC", () => same("roc4", I.roc(c, 4), ref.roc4));
+
+test("donchianBreak: so với kênh của N nến trước, không tính nến hiện tại", () => {
+  const h = [10, 11, 12, 11, 15, 9], l = [8, 9, 10, 9, 10, 5], c = [9, 10, 11, 10, 14, 6];
+  const x = I.donchianBreak(h, l, c, 3);
+  assert.ok(Number.isNaN(x[2]));
+  assert.equal(x[3], (10 - 8) / (12 - 8));                // kênh nến 0–2
+  assert.ok(x[4] > 1);                                     // 14 > đỉnh 12 của nến 1–3
+  assert.ok(x[5] < 0);                                     // 6 < đáy 9 của nến 2–4
+});
