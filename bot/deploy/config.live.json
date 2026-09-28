@@ -1,6 +1,7 @@
 {
   "bot_name": "DonchianRevert-dryrun",
   "initial_state": "running",
+  "force_entry_enable": true,
   "strategy_path": "/freqtrade/user_data/strategies",
   "api_server": { "listen_port": 8080 },
   "order_types": {

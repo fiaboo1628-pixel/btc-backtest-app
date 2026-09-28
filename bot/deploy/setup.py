@@ -6,7 +6,7 @@ Chuẩn bị lần đầu cho bộ dry-run. Chạy trong container (không cần
     docker compose run --rm setup --no-download         # chỉ tạo mật khẩu
 
 Việc làm:
-  - secrets/live.json, secrets/lab.json: user/mật khẩu API ngẫu nhiên cho bot dry-run và LAB
+  - secrets/live.json, secrets/lab.json, secrets/paper.json: user/mật khẩu API ngẫu nhiên cho bot, LAB, bot paper
   - hub.json: cấu hình hub — app backtest, tab Live, Chỉnh tham số, nến trên máy chủ (thay cho tuner.json cũ)
   - chép chiến lược sang user_data/strategies_lab/ cho LAB
   - tải nến 15m BTC/USDT:USDT futures từ 2021 (kèm funding) để LAB backtest được
@@ -91,7 +91,7 @@ def main() -> None:
 
     SECRETS.mkdir(exist_ok=True)
     creds = {}
-    for side in ("live", "lab"):
+    for side in ("live", "lab", "paper"):
         f = SECRETS / f"{side}.json"
         if not f.exists():
             write_json(f, api_creds(f"ft-{side}"))
