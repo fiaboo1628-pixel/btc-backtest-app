@@ -24,6 +24,17 @@ services:
       -c /deploy/config.base.json -c /deploy/config.live.json -c /deploy/secrets/live.json
       ${BOT_EXTRA_CONFIG:-}
 
+  paper:                                    # luôn dry-run trên nến sàn THẬT (không key) — so tín hiệu với backtest
+    <<: *ft                                 # (bot live ở chế độ Demo lấy nến demo-fapi, khác sàn thật)
+    container_name: donchian-paper
+    ports: ["127.0.0.1:8082:8082"]
+    command: >
+      trade
+      --logfile /freqtrade/user_data/logs/paper.log
+      --db-url sqlite:////freqtrade/user_data/paper.sqlite
+      -c /deploy/config.base.json -c /deploy/config.live.json -c /deploy/config.paper.json
+      -c /deploy/secrets/paper.json
+
   lab:
     <<: *ft
     container_name: donchian-lab
