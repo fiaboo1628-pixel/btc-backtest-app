@@ -4,15 +4,14 @@ import { OPS } from "./rules.js";
 import { TF_MS, TF_LIST, resample } from "./timeframes.js";
 import { DEFAULT_EXIT, DEFAULT_ACCOUNT } from "./engine.js";
 import { createLive } from "./live.js";
-import { toBotParams } from "./botparams.js";
+import { toBotParams, fromBotParams } from "./botparams.js";
 
-// Initialize Vercel Web Analytics
-// thống kê truy cập (Vercel Analytics): tải không bắt buộc — lỗi/offline thì bỏ qua, app vẫn chạy
-import("@vercel/analytics").then((m) => m.inject()).catch(() => {});
-
-// Initialize Vercel Speed Insights
-// theo dõi hiệu suất (Speed Insights): tải không bắt buộc — lỗi/offline thì bỏ qua, app vẫn chạy
-import("@vercel/speed-insights").then((m) => m.injectSpeedInsights()).catch(() => {});
+// Vercel Web Analytics + Speed Insights: tải không bắt buộc — lỗi/offline thì bỏ qua, app vẫn chạy.
+// Hub (máy chủ nhà qua Tailscale) và máy local không có node_modules/@vercel → bỏ qua để khỏi lỗi 404 trong console.
+if (!/(\.ts\.net|^localhost|^127\.0\.0\.1)$/.test(location.hostname)) {
+  import("@vercel/analytics").then((m) => m.inject()).catch(() => {});
+  import("@vercel/speed-insights").then((m) => m.injectSpeedInsights()).catch(() => {});
+}
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -452,6 +451,17 @@ function refreshBotFit() {
   try { toBotParams(state.strategy); } catch (e) { msg = `Can't send this strategy: ${e.message}.`; }
   $("#botFit").textContent = msg;
   $("#btnSendBot").disabled = !!msg;
+  $("#btnFromBot").disabled = !!msg;
+}
+
+// Nạp tham số bot đang chạy vào chiến lược hiện tại, để backtest đúng bộ số bot dùng (preset là giá trị mặc định).
+async function loadBotValues() {
+  try {
+    const live = (await (await fetch("/api/tune/schema", { cache: "no-store" })).json()).live;
+    if (!live) throw new Error("the bot isn't answering");
+    loadStrategy(fromBotParams(state.strategy, live));
+    toast("Loaded the bot's current values. Tap Run to backtest them.", "ok");
+  } catch (e) { toast(`Can't load the bot's values: ${e.message}`, "err"); }
 }
 
 async function sendToBot() {
@@ -570,6 +580,7 @@ async function init() {
   });
 
   $("#btnSendBot").addEventListener("click", sendToBot);
+  $("#btnFromBot").addEventListener("click", loadBotValues);
   setupHub();
 
   await refreshDatasets();

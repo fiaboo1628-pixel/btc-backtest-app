@@ -163,7 +163,7 @@ async def _noop():
 def test_live_summary(tmp_path, monkeypatch):
     responses = {
         "/show_config": {"state": "running", "dry_run": False, "strategy": "DonchianRevert", "stake_currency": "USDT"},
-        "/balance": {"total": 1234.5, "starting_capital": 1000, "stake": "USDT"},
+        "/balance": {"total": 1234.5, "total_bot": 990.5, "starting_capital": 1000, "stake": "USDT"},
         "/status": [{"trade_id": 3, "pair": "BTC/USDT:USDT", "is_short": False, "profit_pct": 1.2,
                      "stoploss_order_id": None, "orders": [{"ft_order_side": "stoploss", "status": "open"}]}],
         "/profit": {"profit_all_coin": 50, "trade_count": 3},
@@ -182,7 +182,7 @@ def test_live_summary(tmp_path, monkeypatch):
     ex.write_text(json.dumps({"exchange": {"demo_trading": True, "key": "SECRET"}}))
     c = make_app(tmp_path, live={"api_url": "http://x", "username": "u", "password": "p"}, exchange_file=str(ex))
     j = c.get("/api/live", headers=TS).json()
-    assert j["reachable"] and j["mode"] == "demo" and j["balance"]["total"] == 1234.5
+    assert j["reachable"] and j["mode"] == "demo" and j["balance"]["total"] == 990.5 and j["balance"]["account_total"] == 1234.5
     assert j["open"][0]["stop_on_exchange"] is True and "orders" not in j["open"][0]
     assert [t["trade_id"] for t in j["closed"]] == [2, 1]
     assert j["logs"] == [{"t": 2, "level": "WARNING", "msg": "careful"}]

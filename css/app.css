@@ -47,7 +47,7 @@ input, select { font: inherit; font-size: 16px; color: var(--text); background: 
   transition: border-color .15s, box-shadow .15s; font-variant-numeric: tabular-nums; }
 input:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
 /* thanh trượt tự vẽ */
-input[type=range] { -webkit-appearance: none; appearance: none; padding: 0; border: 0; background: none; height: 26px; box-shadow: none; }
+input[type=range] { -webkit-appearance: none; appearance: none; padding: 0; border: 0; background: none; height: 44px; box-shadow: none; }  /* vùng chạm 44px, thanh vẫn 6px */
 input[type=range]::-webkit-slider-runnable-track { height: 6px; border-radius: 99px;
   background: linear-gradient(90deg, var(--accent) var(--fill, 50%), var(--panel-2) var(--fill, 50%)); }
 input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; margin-top: -8px; border-radius: 50%;
@@ -65,7 +65,7 @@ label.inline select { width: auto; }
 /* nhóm nút liền nhau (Save · Export · Import · Delete) */
 .seg { display: flex; margin-left: auto; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
 .seg > * { font: inherit; font-size: 13px; font-weight: 500; color: var(--text); background: var(--panel-2); border: 0;
-  border-left: 1px solid var(--line); padding: 0 11px; min-height: 38px; display: flex; align-items: center; cursor: pointer; margin: 0; }
+  border-left: 1px solid var(--line); padding: 0 11px; min-height: 44px; display: flex; align-items: center; cursor: pointer; margin: 0; }
 .seg > :first-child { border-left: 0; }
 .seg .danger { color: var(--down); }
 .seg .file, .btn.file { position: relative; overflow: hidden; }
@@ -76,7 +76,7 @@ label.inline select { width: auto; }
   box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 30%, transparent); }
 .btn:active { transform: scale(.98); }
 .btn.danger { color: var(--down); border-color: var(--down); background: transparent; }
-.btn.sm { padding: 7px 12px; font-size: 13.5px; font-weight: 500; min-height: 38px; }
+.btn.sm { padding: 7px 12px; font-size: 13.5px; font-weight: 500; min-height: 44px; }
 .btn:disabled { opacity: .5; }
 .btn.file { display: inline-flex; align-items: center; margin: 4px 0 0; color: var(--text); }
 .btn.ghost { background: transparent; border-style: dashed; color: var(--muted); width: 100%; }
