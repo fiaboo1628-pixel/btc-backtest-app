@@ -86,7 +86,8 @@ def router(cfg: dict) -> APIRouter:
             "exchange": conf.get("exchange"),
             "stake_currency": conf.get("stake_currency"),
             "bot_name": conf.get("bot_name"),
-            "balance": {"total": bal.get("total"), "starting": bal.get("starting_capital"),
+            "balance": {"total": bal.get("total_bot", bal.get("total")),  # phần bot dùng (stake), không cộng BTC/USDC khác của tài khoản
+                        "account_total": bal.get("total"), "starting": bal.get("starting_capital"),
                         "currency": bal.get("stake")},
             "profit": {k: prof.get(k) for k in (
                 "profit_all_coin", "profit_all_percent", "profit_closed_coin", "profit_closed_percent",

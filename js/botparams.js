@@ -87,3 +87,25 @@ export function toBotParams(s, botTf = "15m") {
   }
   return { params };
 }
+
+/** Ngược lại toBotParams: đặt tham số bot đang chạy (p, từ /api/tune/schema .live) vào chiến lược s cùng khuôn,
+ *  để backtest trong app đúng bộ số bot đang dùng. Ném lỗi nếu s không đúng khuôn DonchianRevert. */
+export function fromBotParams(s, p) {
+  toBotParams(s);                                               // kiểm khuôn (ném lỗi với lý do)
+  const out = JSON.parse(JSON.stringify(s));
+  const key = { adx: "adx_min", vol_ratio: "vol_max", atr_pct: "atr_min_pct" };
+  const setSide = (conds, dposKey) => conds.map((c) => {
+    if (c.ind === "dpos") return { ...c, params: { ...c.params, n: p.dc_period }, value: p[dposKey] };
+    if (c.ind === "vol_ratio" && c.op === ">" && c.value === 0) return c;
+    return key[c.ind] in p ? { ...c, value: p[key[c.ind]] } : c;
+  });
+  out.long = setSide(out.long, "dc_long");
+  if (p.short_enabled) {
+    // bot bật Short mà chiến lược chưa có: tạo phía Short đối xứng với Long
+    const base = out.short?.length ? out.short : out.long.map((c) => (c.ind === "dpos" ? { ...c, op: ">=" } : c));
+    out.short = setSide(base, "dc_short");
+  } else out.short = [];
+  out.exit = { ...out.exit, rAtr: p.r_atr, trailStartR: p.trail_on ? p.trail_start_r : 0, trailDistR: p.trail_dist_r, tpR: p.tp_r || 0 };
+  out.account = { ...out.account, riskPct: p.risk_pct, maxLev: p.max_lev };
+  return out;
+}

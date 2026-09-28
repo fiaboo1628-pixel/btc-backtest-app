@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { toBotParams, BOT_LIMITS, BOT_DECIMALS } from "../js/botparams.js";
+import { toBotParams, fromBotParams, BOT_LIMITS, BOT_DECIMALS } from "../js/botparams.js";
 import { DEFAULT_EXIT, DEFAULT_ACCOUNT } from "../js/engine.js";
 
 const preset = (f) => JSON.parse(readFileSync(new URL(`../presets/${f}`, import.meta.url)));
@@ -85,4 +85,20 @@ test("số chữ số thập phân trong app khớp DonchianRevert.py", () => {
     const d = py.match(new RegExp(`${k} = DecimalParameter\\(.*decimals=(\\d+)`));
     assert.equal(d ? Number(d[1]) : 0, dec, k);
   }
+});
+
+test("Lấy tham số bot: fromBotParams rồi toBotParams ra đúng bộ số bot đang chạy", () => {
+  const s = full(preset("donchian_revert.json"));
+  const live = { ...BOT_DEFAULTS, dc_period: 25, dc_long: 0.05, dc_short: 0.95, adx_min: 28, vol_max: 1.2,
+    atr_min_pct: 0.35, r_atr: 2.5, trail_start_r: 1.5, trail_dist_r: 0.3, tp_r: 4, risk_pct: 0.5, max_lev: 3 };
+  assert.deepEqual(toBotParams(fromBotParams(s, live)).params, live);
+  // tắt Short rồi bật lại: phía Short được dựng đối xứng với Long
+  const noShort = fromBotParams(s, { ...live, short_enabled: false });
+  assert.equal(noShort.short.length, 0);
+  assert.deepEqual(toBotParams(fromBotParams(noShort, live)).params, live);
+  // tắt trailing
+  const p = toBotParams(fromBotParams(s, { ...live, trail_on: false })).params;
+  assert.equal(p.trail_on, false);
+  // chiến lược sai khuôn thì báo lỗi
+  assert.throws(() => fromBotParams({ ...s, tradeTf: "1h" }, live), /15m/);
 });

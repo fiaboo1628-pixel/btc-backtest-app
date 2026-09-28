@@ -94,3 +94,66 @@ test("thoát theo kênh: Long đóng dưới đáy N nến trước → thoát �
   const off = backtest(k, sig, atr, { account: acc, exit: { rAtr: 3, trailStartR: 0 } });
   assert.equal(off.trades[0].reason, "end");
 });
+
+// dựng nến 1m theo từng đoạn, rồi nến 15m từ đó
+const mk = () => {
+  const m = { t: [], o: [], h: [], l: [], c: [] };
+  m.push = (o, h, l, c) => { m.t.push(m.t.length * M); m.o.push(o); m.h.push(h); m.l.push(l); m.c.push(c); };
+  return m;
+};
+
+test("detail: giờ thoát là giờ nến 1m chạm stop, không phải giờ mở nến 15m", () => {
+  const m = mk();
+  for (let i = 0; i < 30; i++) m.push(100, 100.2, 99.8, 100);          // tín hiệu ở nến 0, vào lệnh nến 1 giá 100
+  for (let i = 0; i < 15; i++) i === 6 ? m.push(100, 100, 96, 96.5) : m.push(100, 100.2, 99.8, 100);  // phút 6 của nến 2 chạm stop 97
+  const k = agg(m, 15);
+  const sig = new Int8Array(3); sig[0] = 1;
+  const { trades } = backtest(k, sig, new Float64Array(3).fill(1), { account: acc, detail: m, detailMs: 15 * M });
+  assert.equal(trades.length, 1);
+  assert.equal(trades[0].exitT, (30 + 6) * M);
+  assert.equal(trades[0].exit, 97);
+});
+
+test("detail: đảo chiều trong nến vào lệnh ở giá mở của nến 1m vừa thoát, không quay lại giá mở nến 15m", () => {
+  // Long từ nến 1 (100, stop 97). Nến 2: tín hiệu Short ở nến 1; phút 9 của nến 2 chạm stop (giá lúc đó ~95)
+  const m = mk();
+  for (let i = 0; i < 30; i++) m.push(100, 100.2, 99.8, 100);
+  for (let i = 0; i < 15; i++) {
+    if (i < 9) m.push(100, 100.2, 99.8, 100);
+    else if (i === 9) m.push(96, 96.2, 95, 95.5);                        // mở gap dưới stop → thoát ở 96
+    else m.push(95.5, 95.7, 95.3, 95.5);
+  }
+  for (let i = 0; i < 15; i++) m.push(95.5, 95.7, 95.3, 95.5);
+  const k = agg(m, 15);
+  const sig = new Int8Array(4); sig[0] = 1; sig[1] = -1;
+  const { trades } = backtest(k, sig, new Float64Array(4).fill(1), { account: acc, detail: m, detailMs: 15 * M });
+  assert.equal(trades[0].exitT, (30 + 9) * M);
+  assert.equal(trades[0].exit, 96);
+  // Short mới: vào ở giá mở của phút 9 (96), không phải 100 (giá mở nến 15m, đã qua 9 phút)
+  assert.equal(trades[1].dir, -1);
+  assert.equal(trades[1].entry, 96);
+  assert.equal(trades[1].entryT, (30 + 9) * M);
+});
+
+test("funding: mốc lệch vài ms vẫn được tính khi lệnh thoát ở nến mở đúng mốc", () => {
+  const n = 4, k = { t: [], o: [], h: [], l: [], c: [] };
+  for (let i = 0; i < n; i++) { k.t.push(i * 15 * M); k.o.push(100); k.h.push(100.5); k.l.push(99.5); k.c.push(100); }
+  k.l[2] = 90;                                                            // nến 2 chạm stop
+  const sig = new Int8Array(n); sig[0] = 1;
+  const funding = [{ t: 2 * 15 * M + 4, rate: 0.001, mark: 100 }];        // …:30:00.004
+  const { trades } = backtest(k, sig, new Float64Array(n).fill(1), { account: acc, funding });
+  assert.ok(trades[0].funding < 0, "Long trả funding");
+});
+
+test("trượt giá: vào và thoát lệnh market tệ hơn giá gốc", () => {
+  const n = 4, k = { t: [], o: [], h: [], l: [], c: [] };
+  for (let i = 0; i < n; i++) { k.t.push(i * 15 * M); k.o.push(100); k.h.push(100.5); k.l.push(99.5); k.c.push(100); }
+  k.l[2] = 90;
+  const sig = new Int8Array(n); sig[0] = 1;
+  const base = backtest(k, sig, new Float64Array(n).fill(1), { account: acc }).trades[0];
+  const slip = backtest(k, sig, new Float64Array(n).fill(1), { account: { ...acc, slippage: 0.001 } }).trades[0];
+  assert.equal(base.entry, 100);
+  assert.ok(Math.abs(slip.entry - 100.1) < 1e-9);                         // mua cao hơn 0.1%
+  assert.ok(Math.abs(slip.exit - 97.0) < 1e-9);                           // stop 97.1 (theo giá vào), khớp thấp hơn 0.1%
+  assert.ok(slip.pnl < base.pnl);
+});

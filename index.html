@@ -129,10 +129,11 @@
 
     <div class="card" id="botCard" hidden>
       <h2>Bot</h2>
-      <p class="hint">Send these thresholds to the running DonchianRevert bot. Only the numbers change — the bot's logic stays the same. Open trades keep their stop.</p>
+      <p class="hint">Send these thresholds to the running DonchianRevert bot. Only the numbers change — the bot's logic stays the same. An open trade keeps its initial stop (1R), but trailing and take-profit switch to the new values right away.</p>
       <p class="hint warn" id="botFit"></p>
       <div class="row">
         <button class="btn primary grow" id="btnSendBot" type="button">Send to bot</button>
+        <button class="btn" id="btnFromBot" type="button">Use bot's values</button>
         <a class="btn" href="/tune/" id="lnkTune">Tune in freqtrade</a>
       </div>
     </div>

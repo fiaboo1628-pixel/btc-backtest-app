@@ -14,7 +14,8 @@ export function createLive({ root, esc, fmt, sign, cls }) {
     const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
     return s < 90 ? `${s}s ago` : s < 5400 ? `${Math.round(s / 60)} min ago` : `${fmt(s / 3600, 1)} h ago`;
   };
-  const when = (ms) => new Date(ms).toISOString().slice(5, 16).replace("T", " ");
+  const pad = (n) => String(n).padStart(2, "0");
+  const when = (ms) => { const d = new Date(ms); return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };  // giờ máy người xem
 
   function render(j) {
     if (!j.reachable) {
@@ -65,8 +66,9 @@ export function createLive({ root, esc, fmt, sign, cls }) {
       <div class="card hero">
         <div class="hero-top">
           <div>
-            <div class="eyebrow">${esc(j.strategy || "Bot")} · ${esc(j.timeframe || "")} · balance</div>
+            <div class="eyebrow">${esc(j.strategy || "Bot")} · ${esc(j.timeframe || "")} · bot balance</div>
             <div class="big">${fmt(j.balance.total, 2)} <small>${esc(cur)}</small></div>
+            ${j.balance.account_total > j.balance.total + 1 ? `<div class="hint">Whole account ${fmt(j.balance.account_total, 2)} ${esc(cur)} (other coins, not used by the bot)</div>` : ""}
             <div class="sub ${cls(p.profit_all_coin)}">${sign(p.profit_all_coin || 0, 2)} ${esc(cur)} total (${sign(p.profit_all_percent || 0, 2)}%)</div>
           </div>
           <div class="pillbox">
