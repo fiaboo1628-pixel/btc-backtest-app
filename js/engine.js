@@ -30,6 +30,7 @@ export const DEFAULT_ACCOUNT = {
   maxLev: 5,
   fee: 0.0005,         // phí mỗi chiều: taker 0.05% (bot vào/ra bằng lệnh market)
   tradableRatio: 0.99, // như tradable_balance_ratio của freqtrade
+  slippage: 0,         // trượt giá mỗi lệnh market (tỉ lệ, vd 0.0005 = 0.05%); 0 = như backtest freqtrade
   amountStep: 0.001,   // bước khối lượng BTCUSDT perpetual
   priceStep: 0.1,      // bước giá
 };
@@ -84,43 +85,52 @@ export function backtest(c, sig, atr, opts = {}) {
     }
   }
 
+  // mốc funding làm tròn tới phút: fundingTime của Binance hay trễ vài ms (…:00:00.004), không làm tròn thì
+  // lệnh thoát đúng nến mở lúc …:00:00 bị bỏ sót khoản funding đó
+  const fT = funding.map((x) => Math.round(x.t / 60000) * 60000);
   const fundingBetween = (t0, t1, amount, dir) => {
     // tổng funding trong [t0, t1]; Long trả khi rate > 0, Short nhận
-    while (fundIdx < funding.length && funding[fundIdx].t < t0) fundIdx++;
+    while (fundIdx < funding.length && fT[fundIdx] < t0) fundIdx++;
     let f = 0;
-    for (let k = fundIdx; k < funding.length && funding[k].t <= t1; k++) {
+    for (let k = fundIdx; k < funding.length && fT[k] <= t1; k++) {
       f += funding[k].rate * funding[k].mark * amount;
     }
     return dir === 1 ? -f : f;
   };
 
-  const close = (i, price, reason) => {
-    const p = roundStep(price, acc.priceStep);
+  // t: giờ thoát thật (nến nhỏ khi có detail), không phải giờ mở nến giao dịch
+  const close = (i, price, reason, t = c.t[i]) => {
+    // trượt giá: lệnh thoát là lệnh market (stop market / đóng tay) → khớp tệ hơn giá kích hoạt
+    const p = roundStep(price * (1 - pos.dir * acc.slippage), acc.priceStep);
     const gross = pos.dir * pos.amount * (p - pos.entry);
     const fees = acc.fee * pos.amount * (pos.entry + p);
-    const fund = fundingBetween(pos.t0, c.t[i], pos.amount, pos.dir);
+    const fund = fundingBetween(pos.t0, t, pos.amount, pos.dir);
     const pnl = gross - fees + fund;
     closedPnl += pnl;
     trades.push({
-      dir: pos.dir, entryT: pos.t0, exitT: c.t[i], entry: pos.entry, exit: p, amount: pos.amount,
+      dir: pos.dir, entryT: pos.t0, exitT: t, entry: pos.entry, exit: p, amount: pos.amount,
       leverage: pos.lev, r: pos.r, pnl, fees, funding: fund, reason, bars: i - pos.i0,
       balance: acc.wallet + closedPnl,
-      ...(opts.trace ? { path: [...pos.path, [c.t[i], pos.stop]] } : {}),
+      ...(opts.trace ? { path: [...pos.path, [t, pos.stop]] } : {}),
     });
     pos = null;
   };
 
+  let exitJ = -1;          // nến nhỏ vừa thoát lệnh (detail), -1 = thoát trên nến giao dịch
   for (let i = start; i < end; i++) {
-    // freqtrade: nếu lệnh vừa đóng trong nến này và tín hiệu ngược chiều → vào lệnh ngược chiều ngay
-    const closedDir = step(i);
-    if (closedDir && sig[i - 1] === -closedDir) step(i);
+    // freqtrade: nếu lệnh vừa đóng trong nến này và tín hiệu ngược chiều → vào lệnh ngược chiều ngay,
+    // ở giá mở của chính nến (nhỏ) vừa thoát — không quay lại giá mở nến giao dịch (đã qua)
+    exitJ = -1;
+    const closedDir = step(i, -1);
+    if (closedDir && sig[i - 1] === -closedDir) step(i, exitJ);
   }
   if (pos) close(end - 1, c.c[end - 1], "end");
   return { trades, finalBalance: acc.wallet + closedPnl };
 
-  /** Xử lý một nến; trả về hướng lệnh vừa đóng (nếu có). */
-  function step(i) {
+  /** Xử lý một nến; trả về hướng lệnh vừa đóng (nếu có) để đảo chiều. from ≥ 0: vào lệnh từ nến nhỏ này. */
+  function step(i, from) {
     const o = c.o[i], h = c.h[i], l = c.l[i];
+    const eo = from >= 0 ? D.o[from] : o, et = from >= 0 ? D.t[from] : c.t[i];
     let enteredNow = false;
 
     // 0) thoát theo kênh: tín hiệu ở nến trước → thoát ở giá mở cửa nến này
@@ -134,17 +144,18 @@ export function backtest(c, sig, atr, opts = {}) {
     if (!pos && sig[i - 1] !== 0 && Number.isFinite(atr[i - 1])) {
       const dir = sig[i - 1];
       const r = atr[i - 1] * ex.rAtr;
-      const rPct = r / o;
+      const rPct = r / eo;
       const risk = acc.riskPct / 100;
       // đòn bẩy nguyên, làm tròn lên: Binance làm tròn xuống đòn bẩy lẻ (thiếu ký quỹ), notional không đổi
       const lev = Math.min(Math.max(Math.ceil(risk / rPct - 1e-9), 1), acc.maxLev);
       const equity = (acc.wallet + closedPnl) * acc.tradableRatio;
       const stake = Math.min(equity * risk / rPct / lev, equity);
-      const amount = floorStep((stake / o) * lev, acc.amountStep);
+      const entry = roundStep(eo * (1 + dir * acc.slippage), acc.priceStep);  // vào lệnh market: trượt giá
+      const amount = floorStep((stake / entry) * lev, acc.amountStep);
       if (amount > 0) {
-        const stop = dir === 1 ? ceilStep(o - r, acc.priceStep) : floorStep(o + r, acc.priceStep);
-        pos = { dir, entry: o, amount, lev, r, stop, stopRef: o, peak: o, i0: i, t0: c.t[i] };
-        if (opts.trace) pos.path = [[c.t[i], stop]];
+        const stop = dir === 1 ? ceilStep(entry - r, acc.priceStep) : floorStep(entry + r, acc.priceStep);
+        pos = { dir, entry, amount, lev, r, stop, stopRef: entry, peak: entry, i0: i, t0: et };
+        if (opts.trace) pos.path = [[et, stop]];
         enteredNow = true;
       }
     }
@@ -153,9 +164,10 @@ export function backtest(c, sig, atr, opts = {}) {
     // 2–3) quản lý lệnh: trên từng nến nhỏ (detail) hoặc trên chính nến giao dịch
     const d = pos.dir;
     if (D && dStart[i + 1] > dStart[i]) {
-      for (let j = dStart[i]; j < dStart[i + 1]; j++) {
-        const out = manage(D.o[j], D.h[j], D.l[j], enteredNow && j === dStart[i]);
-        if (out) { close(i, out[0], out[1]); return d; }
+      const j0 = from >= 0 ? from : dStart[i];
+      for (let j = j0; j < dStart[i + 1]; j++) {
+        const out = manage(D.o[j], D.h[j], D.l[j], enteredNow && j === j0);
+        if (out) { close(i, out[0], out[1], D.t[j]); exitJ = j; return d; }
       }
     } else {
       const out = manage(o, h, l, enteredNow);
@@ -165,7 +177,8 @@ export function backtest(c, sig, atr, opts = {}) {
     if (opts.trace) pos.path.push([c.t[i], pos.stop]);
 
     // 4) giới hạn thời gian giữ lệnh (thoát ở giá đóng cửa)
-    if (ex.maxHoldBars > 0 && i - pos.i0 + 1 >= ex.maxHoldBars) { close(i, c.c[i], "time"); return d; }
+    // không đảo chiều sau lệnh này: đã thoát ở giá đóng cửa, không vào lại được ở giá mở của chính nến đó
+    if (ex.maxHoldBars > 0 && i - pos.i0 + 1 >= ex.maxHoldBars) { close(i, c.c[i], "time"); return 0; }
     return 0;
   }
 

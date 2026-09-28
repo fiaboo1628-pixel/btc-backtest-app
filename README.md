@@ -35,8 +35,9 @@ Các chỉ báo khớp TA-Lib tới sai số 1e-6 (`tests/indicators.test.mjs`).
 Mở `index.html` qua một web server bất kỳ (GitHub Pages, hoặc `python3 -m http.server`).
 Không có bước build, không phụ thuộc thư viện ngoài.
 
-Test: `npm test` (Node 22+). Test đối chiếu freqtrade cần fixture lớn không commit —
-tạo bằng `tools/export_parity.py`; thiếu fixture thì test đó được bỏ qua.
+Test: `npm test` (Node 22+). `tests/parity.test.mjs` so bộ máy với freqtrade 2026.8 từng lệnh
+(DonchianRevert, nến 1m detail, 02–03/2026; fixture `tests/fixtures/parity_donchian_1m.json.gz`,
+tạo lại bằng `tools/export_parity.py`).
 
 ## Lưu ý
 

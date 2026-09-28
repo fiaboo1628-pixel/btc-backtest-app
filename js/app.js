@@ -228,9 +228,11 @@ function renderStrategy() {
     ["account", "riskPct", "Risk %", "Balance lost if the initial stop is hit", 0.05, 10, 0.05],
     ["account", "maxLev", "Max lev", "Leverage cap", 1, 50, 1],
     ["account", "fee", "Fee %", "Per side", 0, 1, 0.001],
+    ["account", "slippage", "Slippage %", "Market fills worse than the price, per side (a Demo stop filled 0.047% below its trigger). 0 = like freqtrade's backtest", 0, 1, 0.001],
   ];
+  const pct = new Set(["fee", "slippage"]);           // lưu dạng tỉ lệ, hiện dạng %
   $("#exitFields").innerHTML = defs.map(([g, k, label, tip, min, max, st]) => {
-    const v = k === "fee" ? +(s.account.fee * 100).toFixed(4) : (s[g][k] ?? 0);
+    const v = pct.has(k) ? +((s.account[k] ?? 0) * 100).toFixed(4) : (s[g][k] ?? 0);
     return `<label title="${esc(tip)}">${label}<input type="number" data-${g === "exit" ? "exit" : "acc"}="${k}" min="${min}" max="${max}" step="${st}" value="${v}" inputmode="decimal"></label>`;
   }).join("");
 }
@@ -556,7 +558,7 @@ async function init() {
   $("#exitFields").addEventListener("change", (e) => { const k = e.target.dataset.exit; if (k) { state.strategy.exit[k] = Number(e.target.value); persistCurrent(); } });
   $("#exitFields").addEventListener("change", (e) => {
     const k = e.target.dataset.acc; if (!k) return;
-    state.strategy.account[k] = k === "fee" ? Number(e.target.value) / 100 : Number(e.target.value); persistCurrent();
+    state.strategy.account[k] = k === "fee" || k === "slippage" ? Number(e.target.value) / 100 : Number(e.target.value); persistCurrent();
   });
   $("#btnSave").addEventListener("click", () => {
     const all = saved(); all[state.strategy.name] = clone(state.strategy); store.set("strategies", all); refreshPick();
