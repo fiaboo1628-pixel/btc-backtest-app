@@ -7,6 +7,7 @@
 //  - TP cố định theo R (tpR > 0); stop chạm trước TP nếu cùng một nến
 //  - làm tròn giá stop theo bước giá (Long làm tròn lên, Short làm tròn xuống), khối lượng cắt xuống
 //  - phí trên giá trị lệnh ở cả hai chiều, funding cộng dồn từ lúc vào tới nến thoát
+//  - thoát theo kênh (exitChannel): tín hiệu khi nến đóng → thoát ở giá mở cửa nến sau, như exit signal của freqtrade
 //  - khối lượng theo rủi ro: mất `riskPct`% vốn nếu dính stop ban đầu (đòn bẩy tự tính, có trần)
 
 const roundStep = (x, step) => Math.round(x / step) * step;
@@ -19,6 +20,8 @@ export const DEFAULT_EXIT = {
   trailDistR: 0.5,     // trailing cách đỉnh/đáy ngần này R
   maxHoldBars: 0,      // 0 = không giới hạn thời gian giữ lệnh
   tpR: 0,              // chốt lời cố định ở ngần này R (0 = tắt)
+  exitChannel: 0,      // thoát theo kênh: Long đóng dưới đáy N nến trước / Short đóng trên đỉnh → thoát ở giá mở nến sau (0 = tắt)
+  atrN: 14,            // số nến ATR dùng tính R
 };
 
 export const DEFAULT_ACCOUNT = {
@@ -46,6 +49,18 @@ export function backtest(c, sig, atr, opts = {}) {
   const start = Math.max(1, opts.startIdx ?? 1);
   const end = Math.min(c.t.length, opts.endIdx ?? c.t.length);
   const trades = [];
+  // tín hiệu thoát theo kênh tại nến đóng: xl/xh = đáy/đỉnh của exitChannel nến trước đó
+  let exitLong = null, exitShort = null;
+  if (ex.exitChannel > 0 && c.h) {
+    const m = ex.exitChannel, n = c.t.length;
+    exitLong = new Uint8Array(n); exitShort = new Uint8Array(n);
+    for (let i = m; i < n; i++) {
+      let hi = -Infinity, lo = Infinity;
+      for (let j = i - m; j < i; j++) { if (c.h[j] > hi) hi = c.h[j]; if (c.l[j] < lo) lo = c.l[j]; }
+      exitLong[i] = c.c[i] < lo ? 1 : 0;
+      exitShort[i] = c.c[i] > hi ? 1 : 0;
+    }
+  }
   let closedPnl = 0;
   let pos = null;
   let fundIdx = 0;
@@ -107,6 +122,13 @@ export function backtest(c, sig, atr, opts = {}) {
   function step(i) {
     const o = c.o[i], h = c.h[i], l = c.l[i];
     let enteredNow = false;
+
+    // 0) thoát theo kênh: tín hiệu ở nến trước → thoát ở giá mở cửa nến này
+    if (pos && exitLong && (pos.dir === 1 ? exitLong[i - 1] : exitShort[i - 1])) {
+      const d = pos.dir;
+      close(i, o, "exit_signal");
+      return d;
+    }
 
     // 1) vào lệnh theo tín hiệu của nến trước
     if (!pos && sig[i - 1] !== 0 && Number.isFinite(atr[i - 1])) {

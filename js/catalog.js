@@ -12,6 +12,13 @@ export const CATALOG = [
     calc: (k, p) => I.donchianPos(k.h, k.l, k.c, p.n),
   },
   {
+    id: "dbrk", group: "Price position", label: "Donchian breakout",
+    help: "Close vs the channel of the N bars BEFORE this one: >1 = broke above the high, <0 = broke below the low",
+    range: [-1, 2, 0.001],
+    params: [P("n", "Bars", 20, 5, 100)],
+    calc: (k, p) => I.donchianBreak(k.h, k.l, k.c, p.n),
+  },
+  {
     id: "bb_pctb", group: "Price position", label: "Bollinger %B",
     help: "0 = lower band, 1 = upper band; <0 or >1 = outside", range: [-0.5, 1.5, 0.001],
     params: [P("n", "Bars", 20, 5, 100), P("k", "Std dev", 2, 1, 4, 0.1)],

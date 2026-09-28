@@ -17,7 +17,7 @@ self.onmessage = (e) => {
     // dữ liệu nhỏ hơn khung giao dịch → quản lý lệnh trên từng nến nhỏ (chính xác hơn, như --timeframe-detail)
     const detail = strategy.tradeTf !== sourceTf && strategy.exit?.intrabar !== false;
     const sig = buildSignals(strategy, base, source);
-    const a = atr(base.h, base.l, base.c, 14);
+    const a = atr(base.h, base.l, base.c, strategy.exit?.atrN || 14);
     const idx = (t) => { let i = 0; while (i < base.t.length && base.t[i] < t) i++; return i; };
     const s0 = Math.max(1, idx(from ?? base.t[0])), s1 = to ? idx(to) : base.t.length;
     if (s1 - s0 < 2) throw new Error("No data in the selected From/To range.");

@@ -1,0 +1,27 @@
+{
+  "name": "TrendBreakout",
+  "description": "4h trend following, both sides: close breaks the 20-bar channel, only with the EMA200 trend. Stop 2 × ATR(20); exit when a bar closes through the 10-bar channel. Research on 5 coins 2021–2026 (0.08% cost/side, risk 0.5%): +411%, DD 20%.",
+  "tradeTf": "4h",
+  "long": [
+    { "ind": "dbrk", "params": { "n": 20 }, "op": ">", "value": 1 },
+    { "ind": "ema_dist", "params": { "n": 200 }, "op": ">", "value": 0 }
+  ],
+  "short": [
+    { "ind": "dbrk", "params": { "n": 20 }, "op": "<", "value": 0 },
+    { "ind": "ema_dist", "params": { "n": 200 }, "op": "<", "value": 0 }
+  ],
+  "exit": {
+    "rAtr": 2,
+    "atrN": 20,
+    "trailStartR": 0,
+    "trailDistR": 1.0,
+    "tpR": 0,
+    "maxHoldBars": 0,
+    "exitChannel": 10
+  },
+  "account": {
+    "riskPct": 0.5,
+    "maxLev": 5,
+    "fee": 0.0008
+  }
+}

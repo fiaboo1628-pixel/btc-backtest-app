@@ -218,11 +218,13 @@ function renderStrategy() {
   refreshTfOptions();
   // [group, key, label, tooltip, min, max, step]
   const defs = [
-    ["exit", "rAtr", "Stop (×ATR)", "1R = initial stop distance = this × ATR(14)", 0.5, 10, 0.1],
+    ["exit", "rAtr", "Stop (×ATR)", "1R = initial stop distance = this × ATR", 0.5, 10, 0.1],
+    ["exit", "atrN", "ATR bars", "ATR length used for the stop / R", 5, 100, 1],
     ["exit", "trailStartR", "Trail at (R)", "Start trailing once profit reaches this many R (0 = no trailing)", 0, 10, 0.1],
     ["exit", "trailDistR", "Trail gap (R)", "Trailing stop distance from the high/low, in R", 0.1, 5, 0.1],
     ["exit", "tpR", "Take profit (R)", "Fixed take-profit at this many R (0 = off)", 0, 20, 0.1],
     ["exit", "maxHoldBars", "Max bars", "Close after this many bars (0 = off)", 0, 5000, 1],
+    ["exit", "exitChannel", "Channel exit", "Close a Long when a bar closes below the low of this many previous bars (Short: above the high); exits at the next open. 0 = off", 0, 200, 1],
     ["account", "wallet", "Capital", "Starting balance (USDT)", 10, 1e9, 1],
     ["account", "riskPct", "Risk %", "Balance lost if the initial stop is hit", 0.05, 10, 0.05],
     ["account", "maxLev", "Max lev", "Leverage cap", 1, 50, 1],
@@ -381,7 +383,7 @@ function renderResult(r, ms) {
       <small>${y.trades} · PF ${fmt(y.pf)}</small></div>`).join("") || `<p class="hint">No trades</p>`;
 
   // lý do thoát: thanh tỉ lệ + chú thích
-  const names = { stop_loss: "Stop", trailing: "Trail", take_profit: "TP", time: "Time", end: "Open at end" };
+  const names = { stop_loss: "Stop", trailing: "Trail", take_profit: "TP", time: "Time", exit_signal: "Channel", end: "Open at end" };
   const reasons = Object.entries(r.exitReasons), tot = reasons.reduce((a, [, v]) => a + v, 0) || 1;
   $("#resExitBar").innerHTML = reasons.map(([k, v]) => `<i class="x-${k}" style="flex:${v}"></i>`).join("");
   $("#resExits").innerHTML = reasons.map(([k, v]) => `<span class="chip"><i class="dot x-${k}"></i>${names[k] || k} ${v} · ${fmt(v / tot * 100, 0)}%</span>`).join("")
