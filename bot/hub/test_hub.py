@@ -320,11 +320,12 @@ def test_push_subscribe_persists_and_drops_gone_devices(tmp_path, monkeypatch):
     assert key["devices"] == 0 and len(push.unb64u(key["key"])) == 65
     ua = push._pub_bytes(ec.generate_private_key(ec.SECP256R1()).public_key())
     sub = {"endpoint": "https://web.push.apple.com/dev1", "keys": {"p256dh": push.b64u(ua), "auth": push.b64u(b"a" * 16)}}
-    assert c.post("/api/push/subscribe", json=sub, headers=TS).json()["devices"] == 1
+    assert c.post("/api/push/subscribe", json=sub, headers={**TS, "x-forwarded-host": "hub.example.ts.net"}).json()["devices"] == 1
     assert c.post("/api/push/subscribe", json=sub, headers=TS).json()["devices"] == 1          # không trùng
     assert c.post("/api/push/subscribe", json={**sub, "endpoint": "http://evil"}, headers=TS).status_code == 400
     saved = json.loads((tmp_path / "data" / "push.json").read_text())
     assert saved["subs"][0]["endpoint"] == sub["endpoint"] and "BEGIN PRIVATE KEY" in saved["vapid_private"]
+    assert saved["subject"] == "https://hub.example.ts.net"                  # Apple từ chối mailto:@localhost
     assert (tmp_path / "data" / "push.json").stat().st_mode & 0o777 == 0o600
 
     sent = []
@@ -339,4 +340,6 @@ def test_push_subscribe_persists_and_drops_gone_devices(tmp_path, monkeypatch):
     monkeypatch.setattr(push.httpx.AsyncClient, "post", fake_post)
     assert c.post("/api/push/test", headers=TS).json() == {"sent": 0, "devices": 0}
     assert sent[0][0] == sub["endpoint"] and sent[0][1]["Content-Encoding"] == "aes128gcm"
+    claims = sent[0][1]["Authorization"].split("t=")[1].split(",")[0].split(".")[1]
+    assert json.loads(push.unb64u(claims))["sub"] == "https://hub.example.ts.net"
     assert c.get("/api/live", headers=TS).status_code in (200, 502)          # router live vẫn gắn được
