@@ -61,10 +61,9 @@ def mode_of(conf: dict, mode_file: Path) -> tuple[str, str | None]:
     return mode, None
 
 
-def router(cfg: dict) -> APIRouter:
+def router(cfg: dict, has_alerts=lambda: False) -> APIRouter:
     live = FtClient(cfg["live"])
     mode_file = Path(cfg.get("mode_file", "/deploy/.env"))
-    alerts_on = bool((cfg.get("alerts") or {}).get("telegram_token"))
     r = APIRouter()
 
     @r.get("/api/live")
@@ -92,7 +91,7 @@ def router(cfg: dict) -> APIRouter:
             "reachable": True,
             "mode": mode,
             "mode_warning": mode_warning,
-            "alerts": alerts_on,
+            "alerts": has_alerts(),
             "state": conf.get("state"),
             "strategy": conf.get("strategy"),
             "timeframe": conf.get("timeframe"),

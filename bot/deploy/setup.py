@@ -8,8 +8,9 @@ Chuẩn bị lần đầu cho bộ dry-run. Chạy trong container (không cần
 
 Việc làm:
   - secrets/live.json, secrets/lab.json, secrets/paper.json: user/mật khẩu API ngẫu nhiên cho bot, LAB, bot paper
-  - --telegram: thông báo lệnh (freqtrade) + cảnh báo sự cố (hub canh bot: chết, kẹt, mất stop). Bắt buộc trước
-    khi dùng tiền thật. Token lấy qua getpass hoặc TELEGRAM_TOKEN / TELEGRAM_CHAT_ID, không qua tham số dòng lệnh
+  - Cảnh báo sự cố (hub canh bot: chết, kẹt, mất stop): bật "Alerts on this device" ở tab Live trên điện thoại,
+    hoặc --telegram. Tiền thật bắt buộc có ít nhất một kênh.
+  - --telegram: thông báo lệnh (freqtrade) + cảnh báo sự cố qua Telegram. Token lấy qua getpass hoặc TELEGRAM_TOKEN / TELEGRAM_CHAT_ID, không qua tham số dòng lệnh
     (lộ trong `ps` và lịch sử shell).
   - hub.json: cấu hình hub — app backtest, tab Live, Chỉnh tham số, nến trên máy chủ (thay cho tuner.json cũ)
   - chép chiến lược sang user_data/strategies_lab/ cho LAB
@@ -134,7 +135,7 @@ def main() -> None:
     if args.api or args.demo_from_env or args.dryrun:
         guard_open_trades(interactive=not args.demo_from_env)
     if args.api:
-        set_api(telegram_on=bool(creds["live"].get("telegram", {}).get("enabled")))
+        set_api(alerts_on=has_alerts(creds))
     elif args.demo_from_env:
         set_demo_from_env()
     elif args.dryrun:
@@ -218,13 +219,26 @@ def ask(prompt: str, choices: dict[str, str]) -> str:
             return choices[a]
 
 
-def set_api(telegram_on: bool) -> None:
+def has_alerts(creds: dict) -> bool:
+    """Có kênh cảnh báo: Telegram, hoặc ít nhất một điện thoại đã bật Alerts ở tab Live (hub lưu trong push.json)."""
+    if creds["live"].get("telegram", {}).get("enabled"):
+        return True
+    try:
+        hub = json.loads((DEPLOY / "hub.json").read_text(encoding="utf-8"))
+        push = Path(hub.get("push_file") or Path(hub["data"]["dir"]) / "push.json")
+        return bool(json.loads(push.read_text(encoding="utf-8")).get("subs"))
+    except (OSError, ValueError, KeyError):
+        return False
+
+
+def set_api(alerts_on: bool) -> None:
     """Lưu key vào secrets/exchange.json và bật overlay config.exchange.json qua file .env của compose.
     Demo/Thật chỉ khác cờ demo_trading + bộ key; mỗi tài khoản dùng file lịch sử lệnh riêng."""
     kind = ask("Key của tài khoản nào? [d] Demo / [t] Thật: ", {"d": "demo", "t": "real"})
     if kind == "real":
-        if not telegram_on:
-            raise SystemExit("Tiền thật cần kênh cảnh báo trước: chạy setup --no-download --telegram, rồi chạy lại.")
+        if not alerts_on:
+            raise SystemExit("Tiền thật cần kênh cảnh báo trước: bật \"Alerts on this device\" ở tab Live trên điện thoại "
+                             "(hoặc setup --no-download --telegram), rồi chạy lại.")
         print("\nTIỀN THẬT. Key phải: chỉ bật Futures, KHÔNG bật rút tiền, giới hạn IP của máy này.")
         if input('Gõ đúng chữ REAL để tiếp tục: ').strip() != "REAL":
             raise SystemExit("Huỷ, không đổi gì.")

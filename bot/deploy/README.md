@@ -33,9 +33,13 @@ Tạo mật khẩu ngẫu nhiên, chép chiến lược cho LAB, tải nến 15m
 Mật khẩu hub và FreqUI không in ra màn hình; xem bằng `docker compose run --rm setup --no-download --show-login`.
 File mật khẩu/key (`secrets/`, `hub.json`) có quyền 600; setup đặt lại quyền mỗi lần chạy.
 
-**Telegram (bắt buộc trước tiền thật)**: thông báo lệnh của bot, và hub canh bot mỗi phút — báo khi bot
-không trả lời, không xử lý nến quá 3 phút, bị dừng, có lệnh mở mà không có stop trên sàn, hoặc log có lỗi.
-Tạo bot với @BotFather lấy token, nhắn cho bot một tin rồi lấy chat id (ví dụ qua @userinfobot), sau đó:
+**Cảnh báo (bắt buộc trước tiền thật)**: hub canh bot mỗi phút — báo khi bot không trả lời, không xử lý nến
+quá 3 phút, bị dừng, có lệnh mở mà không có stop trên sàn, hoặc log có lỗi. Nhận trên điện thoại: mở hub, tab
+**Live** → **Alerts on this device** → **Turn on alerts** (iPhone: trước đó Share → Add to Home Screen và mở từ
+biểu tượng đó). Một thông báo thử sẽ tới ngay.
+
+Tuỳ chọn thêm Telegram (thông báo từng lệnh + cùng các cảnh báo trên): tạo bot với @BotFather lấy token, nhắn cho
+bot một tin rồi lấy chat id (ví dụ qua @userinfobot), sau đó:
 ```bash
 docker compose run --rm setup --no-download --telegram   # hỏi token (gõ không hiện) và chat id
 docker compose restart live hub
@@ -80,7 +84,7 @@ cho quen, khi muốn lên tiền thật chỉ cần nhập lại key thật.
    ```
    - **Vốn tối đa** bot được dùng (ví dụ 300 USDT): Demo bỏ trống được (= toàn bộ số dư futures);
      tiền thật bắt buộc, phải là số dương và không quá số USDT trong ví futures.
-   - Chọn Thật: phải bật Telegram trước, gõ chữ `REAL` để xác nhận, và setup hỏi Binance quyền của key —
+   - Chọn Thật: phải có kênh cảnh báo trước (điện thoại hoặc Telegram), gõ chữ `REAL` để xác nhận, và setup hỏi Binance quyền của key —
      key bật rút tiền hoặc chưa bật Futures thì từ chối; chưa giới hạn IP thì phải gõ `KHONG IP` mới cho qua.
    - Mỗi loại tài khoản có lịch sử lệnh riêng: `user_data/demo.sqlite`, `user_data/real.sqlite`.
 4. Quay về dry-run: `docker compose run --rm setup --dryrun` rồi `docker compose up -d`.

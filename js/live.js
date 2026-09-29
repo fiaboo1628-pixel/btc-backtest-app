@@ -17,6 +17,85 @@ export function createLive({ root, esc, fmt, sign, cls }) {
   const pad = (n) => String(n).padStart(2, "0");
   const when = (ms) => { const d = new Date(ms); return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };  // giờ máy người xem
 
+  // Thông báo đẩy (Web Push) tới máy này: hub báo khi bot chết, kẹt, mất stop, log lỗi (bot/hub/alerts.py).
+  const push = { sub: null, checked: false, busy: false, msg: "", alerts: null };
+  const canPush = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+  const ios = /iPhone|iPad/.test(navigator.userAgent);
+  const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+  const b64 = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
+  const post = (path, body) => fetch(path, { method: "POST", headers: { "content-type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined }).then(async (r) => {
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `HTTP ${r.status}`);
+    return r.json();
+  });
+
+  function paintPush() {
+    const box = root.querySelector("#pushCard");
+    if (!box) return;
+    const none = push.alerts === false;
+    let body;
+    if (!canPush) {
+      body = ios && !standalone
+        ? `<p class="hint">On iPhone: tap Share → <b>Add to Home Screen</b>, open the app from that icon, then come back here.</p>`
+        : `<p class="hint">This browser can't receive notifications.</p>`;
+    } else if (!push.checked) {
+      body = `<p class="hint">Checking…</p>`;
+    } else if (push.sub) {
+      body = `<p class="hint">On for this device ✓ — you get a notification when the bot stops, gets stuck, loses its stop order or logs an error.</p>
+        <div class="row"><button class="btn sm" data-push="test" ${push.busy ? "disabled" : ""}>Send test</button>
+        <button class="btn sm" data-push="off" ${push.busy ? "disabled" : ""}>Turn off</button></div>`;
+    } else {
+      body = `<p class="hint">Get a notification on this device when the bot stops, gets stuck, loses its stop order or logs an error.</p>
+        <div class="row"><button class="btn sm" data-push="on" ${push.busy ? "disabled" : ""}>Turn on alerts</button></div>`;
+    }
+    box.innerHTML = `<h2>Alerts on this device</h2>
+      ${none ? `<p class="hint warn">No alerts set up yet: if the bot stops or loses its stop order, nobody is told.</p>` : ""}
+      ${body}${push.msg ? `<p class="hint">${esc(push.msg)}</p>` : ""}`;
+  }
+
+  async function checkPush() {
+    if (!canPush || push.checked) return;
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      push.sub = await reg.pushManager.getSubscription();
+    } catch { push.sub = null; }
+    push.checked = true;
+    paintPush();
+  }
+
+  async function pushAction(what) {
+    push.busy = true; push.msg = ""; paintPush();
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      if (what === "on") {
+        if (await Notification.requestPermission() !== "granted") throw new Error("Notifications are blocked for this app in Settings.");
+        const { key } = await fetch("/api/push/key").then((r) => r.json());
+        push.sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(key) });
+        await post("/api/push/subscribe", push.sub.toJSON());
+        const t = await post("/api/push/test");
+        push.msg = t.sent ? "Done. A test notification is on its way." : "Saved, but the test notification did not go through.";
+      } else if (what === "test") {
+        if (push.sub) await post("/api/push/subscribe", push.sub.toJSON());   // đăng ký lại phòng khi hub đã xoá
+        const t = await post("/api/push/test");
+        push.msg = t.sent ? `Sent to ${t.sent} device(s).` : "Nothing was delivered — turn alerts off and on again.";
+      } else if (what === "off" && push.sub) {
+        await post("/api/push/unsubscribe", push.sub.toJSON());
+        await push.sub.unsubscribe();
+        push.sub = null;
+      }
+    } catch (e) {
+      push.msg = `Couldn't do that: ${e.message}`;
+    } finally {
+      push.busy = false;
+      paintPush();
+    }
+  }
+
+  root.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-push]");
+    if (b && !push.busy) pushAction(b.dataset.push);
+  });
+
   function render(j) {
     if (!j.reachable) {
       root.innerHTML = `<div class="card"><h2>Bot offline</h2>
@@ -63,7 +142,7 @@ export function createLive({ root, esc, fmt, sign, cls }) {
     root.innerHTML = `
       <div class="card offline" hidden><p class="hint warn"></p></div>
       ${j.mode_warning ? `<div class="card"><p class="hint warn">${esc(j.mode_warning)}</p></div>` : ""}
-      ${j.alerts === false && j.mode !== "paper" ? `<div class="card"><p class="hint warn">No alerts set up: if the bot stops or loses its stop order, nobody is told. Run <code>docker compose run --rm setup --no-download --telegram</code> on the server.</p></div>` : ""}
+      <div class="card" id="pushCard"></div>
       <div class="card hero">
         <div class="hero-top">
           <div>
@@ -104,6 +183,9 @@ export function createLive({ root, esc, fmt, sign, cls }) {
       lastOk = Date.now();
       failSince = 0;
       render(j);
+      push.alerts = j.alerts;
+      paintPush();
+      checkPush();
     } catch (e) {
       if (!lastOk) root.innerHTML = `<div class="card"><p class="hint warn">Can't reach the home server: ${esc(e.message)}</p></div>`;
       else {

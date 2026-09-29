@@ -37,6 +37,7 @@ sys.path.insert(0, str(HERE))
 import alerts  # noqa: E402
 import candles  # noqa: E402
 import live  # noqa: E402
+import push  # noqa: E402
 import tune  # noqa: E402
 
 log = logging.getLogger("hub")
@@ -160,11 +161,22 @@ def create_app(cfg: dict) -> FastAPI:
         app.include_router(candles.router(store))
         features["data"] = True
     if "live" in cfg:
-        app.include_router(live.router(cfg))
-        features["live"] = True
         a = cfg.get("alerts") or {}
-        send = alerts.telegram_sender(a["telegram_token"], a["chat_id"]) if a.get("telegram_token") else None
-        watchdog = alerts.Watchdog(tune.FtClient(cfg["live"]), send)
+        tg = alerts.telegram_sender(a["telegram_token"], a["chat_id"]) if a.get("telegram_token") else None
+        data_dir = Path(cfg["data"].get("dir", HERE / "data")) if "data" in cfg else HERE / "data"
+        pusher = push.Push(Path(cfg.get("push_file", data_dir / "push.json")))
+        app.include_router(pusher.router())
+
+        async def send(msg: str) -> None:
+            if tg:
+                await tg(msg)
+            if pusher.subs:
+                await pusher.send("Bot alert", msg)
+
+        has_channel = lambda: bool(tg or pusher.subs)  # noqa: E731
+        app.include_router(live.router(cfg, has_channel))
+        features["live"] = True
+        watchdog = alerts.Watchdog(tune.FtClient(cfg["live"]), send, has_channel)
     if "lab" in cfg and "live" in cfg:
         try:
             app.include_router(tune.router(cfg))
