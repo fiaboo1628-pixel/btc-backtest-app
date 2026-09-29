@@ -25,7 +25,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.hmac import HMAC
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 log = logging.getLogger("hub.push")
@@ -85,9 +85,12 @@ class Sub(BaseModel):
 
 
 class Push:
-    def __init__(self, path: Path, subject: str = "mailto:hub@localhost"):
-        self.path, self.subject = path, subject
+    def __init__(self, path: Path):
+        self.path = path
         st = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        # "sub" của VAPID: Apple trả 403 BadJwtToken với mailto:…@localhost, nên dùng địa chỉ https của hub,
+        # lấy từ lần đăng ký đầu tiên (tên miền trang người dùng đang mở)
+        self.subject: str | None = st.get("subject")
         if st.get("vapid_private"):
             self.key = serialization.load_pem_private_key(st["vapid_private"].encode(), None)
         else:
@@ -107,7 +110,7 @@ class Push:
         tmp = self.path.with_suffix(".tmp")
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump({"vapid_private": pem, "subs": self.subs}, f)
+            json.dump({"vapid_private": pem, "subject": self.subject, "subs": self.subs}, f)
             f.flush()
             os.fsync(f.fileno())
         tmp.replace(self.path)
@@ -123,12 +126,13 @@ class Push:
     async def send(self, title: str, body: str) -> int:
         """Gửi tới mọi máy; máy đã huỷ đăng ký (404/410) thì bỏ. Trả về số máy nhận."""
         data = json.dumps({"title": title, "body": body}).encode()
+        subject = self.subject or "https://github.com/fiaboo1628-pixel/btc-backtest-app"
         ok, gone = 0, []
         async with httpx.AsyncClient(timeout=15) as cl:
             for s in list(self.subs):
                 try:
                     r = await cl.post(s["endpoint"], content=encrypt(data, s["keys"]["p256dh"], s["keys"]["auth"]),
-                                      headers={"Authorization": vapid_header(self.key, s["endpoint"], self.subject),
+                                      headers={"Authorization": vapid_header(self.key, s["endpoint"], subject),
                                                "Content-Encoding": "aes128gcm", "TTL": "86400", "Urgency": "high",
                                                "Content-Type": "application/octet-stream"})
                 except httpx.HTTPError as e:
@@ -152,9 +156,12 @@ class Push:
             return {"key": self.public_key, "devices": len(self.subs)}
 
         @r.post("/api/push/subscribe")
-        async def subscribe(sub: Sub):
+        async def subscribe(sub: Sub, request: Request):
             if not sub.endpoint.startswith("https://") or not {"p256dh", "auth"} <= set(sub.keys):
                 raise HTTPException(400, "Đăng ký không hợp lệ")
+            host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or "").split(",")[0].strip()
+            if not self.subject and host and not host.startswith(("localhost", "127.")):
+                self.subject = f"https://{host.split(':')[0]}"
             self.add(sub.model_dump())
             return {"devices": len(self.subs)}
 
