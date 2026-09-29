@@ -274,3 +274,69 @@ def test_live_unreachable(tmp_path, monkeypatch):
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
+
+
+def test_push_encrypt_decrypts_per_rfc8291_and_vapid_verifies(tmp_path):
+    """Máy nhận (khoá riêng của trình duyệt) giải mã được tin theo RFC 8291; chữ ký VAPID hợp lệ với khoá công khai."""
+    import push
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+
+    ua = ec.generate_private_key(ec.SECP256R1())                           # "trình duyệt"
+    ua_pub = push._pub_bytes(ua.public_key())
+    auth = b"0123456789abcdef"
+    body = push.encrypt(b'{"title":"t","body":"x"}', push.b64u(ua_pub), push.b64u(auth))
+
+    salt, rs, idlen = body[:16], int.from_bytes(body[16:20], "big"), body[20]
+    as_pub, ct = body[21:21 + idlen], body[21 + idlen:]
+    assert rs == 4096 and idlen == 65
+    hk = lambda salt, ikm, info, n: HKDF(hashes.SHA256(), n, salt, info).derive(ikm)  # noqa: E731
+    shared = ua.exchange(ec.ECDH(), ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), as_pub))
+    ikm = hk(auth, shared, b"WebPush: info\x00" + ua_pub + as_pub, 32)
+    plain = AESGCM(hk(salt, ikm, b"Content-Encoding: aes128gcm\x00", 16)).decrypt(
+        hk(salt, ikm, b"Content-Encoding: nonce\x00", 12), ct, None)
+    assert plain == b'{"title":"t","body":"x"}\x02'
+
+    p = push.Push(tmp_path / "push.json")
+    h = push.vapid_header(p.key, "https://web.push.apple.com/abc", "mailto:x@y", now=1000)
+    t, k = h.removeprefix("vapid t=").split(", k=")
+    head, claims, sig = t.split(".")
+    assert json.loads(push.unb64u(claims)) == {"aud": "https://web.push.apple.com", "exp": 1000 + 43200, "sub": "mailto:x@y"}
+    raw = push.unb64u(sig)
+    pub = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), push.unb64u(k))
+    pub.verify(encode_dss_signature(int.from_bytes(raw[:32], "big"), int.from_bytes(raw[32:], "big")),
+               f"{head}.{claims}".encode(), ec.ECDSA(hashes.SHA256()))       # ném lỗi nếu sai
+    assert k == p.public_key
+
+
+def test_push_subscribe_persists_and_drops_gone_devices(tmp_path, monkeypatch):
+    import push
+    from cryptography.hazmat.primitives.asymmetric import ec
+    c = make_app(tmp_path, live={"api_url": "http://x", "username": "u", "password": "p"})
+    key = c.get("/api/push/key", headers=TS).json()
+    assert key["devices"] == 0 and len(push.unb64u(key["key"])) == 65
+    ua = push._pub_bytes(ec.generate_private_key(ec.SECP256R1()).public_key())
+    sub = {"endpoint": "https://web.push.apple.com/dev1", "keys": {"p256dh": push.b64u(ua), "auth": push.b64u(b"a" * 16)}}
+    assert c.post("/api/push/subscribe", json=sub, headers=TS).json()["devices"] == 1
+    assert c.post("/api/push/subscribe", json=sub, headers=TS).json()["devices"] == 1          # không trùng
+    assert c.post("/api/push/subscribe", json={**sub, "endpoint": "http://evil"}, headers=TS).status_code == 400
+    saved = json.loads((tmp_path / "data" / "push.json").read_text())
+    assert saved["subs"][0]["endpoint"] == sub["endpoint"] and "BEGIN PRIVATE KEY" in saved["vapid_private"]
+    assert (tmp_path / "data" / "push.json").stat().st_mode & 0o777 == 0o600
+
+    sent = []
+
+    class Resp:
+        def __init__(self, code): self.status_code, self.text = code, ""
+
+    async def fake_post(self, url, content=None, headers=None):
+        sent.append((url, headers))
+        return Resp(410)                                                      # máy đã huỷ đăng ký
+
+    monkeypatch.setattr(push.httpx.AsyncClient, "post", fake_post)
+    assert c.post("/api/push/test", headers=TS).json() == {"sent": 0, "devices": 0}
+    assert sent[0][0] == sub["endpoint"] and sent[0][1]["Content-Encoding"] == "aes128gcm"
+    assert c.get("/api/live", headers=TS).status_code in (200, 502)          # router live vẫn gắn được

@@ -1,5 +1,5 @@
 // Service worker: lưu sẵn file của app để mở được khi không có mạng. Dữ liệu nến nằm trong IndexedDB.
-const CACHE = "backtest-v14";
+const CACHE = "backtest-v15";
 const FILES = [
   "./", "index.html", "css/app.css", "manifest.webmanifest", "icons/icon.svg",
   "js/app.js", "js/data.js", "js/catalog.js", "js/rules.js", "js/engine.js", "js/indicators.js",
@@ -19,4 +19,18 @@ self.addEventListener("fetch", (e) => {
     if (r.ok) { const copy = r.clone(); caches.open(CACHE).then((c) => c.put(e.request, copy)); }
     return r;
   }).catch(() => caches.match(e.request).then((m) => m || Response.error())));
+});
+
+// Cảnh báo bot từ hub (bot/hub/push.py): hiện thông báo, bấm vào thì mở app.
+self.addEventListener("push", (e) => {
+  let m = { title: "Bot alert", body: "" };
+  try { m = { ...m, ...e.data.json() }; } catch { m.body = e.data?.text() || ""; }
+  e.waitUntil(self.registration.showNotification(m.title, { body: m.body, icon: "icons/icon.svg", tag: m.body.slice(0, 60) }));
+});
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({ type: "window" }).then((ws) => {
+    const w = ws.find((c) => new URL(c.url).origin === location.origin);
+    return w ? w.focus() : self.clients.openWindow("./");
+  }));
 });

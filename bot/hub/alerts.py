@@ -1,5 +1,5 @@
 """
-Canh bot live, báo qua Telegram khi có sự cố — để bot chết hay mất stop không nằm im tới lúc có người mở app.
+Canh bot live, báo khi có sự cố (thông báo đẩy tới điện thoại đã bật Alerts ở tab Live — push.py — và/hoặc Telegram) — để bot chết hay mất stop không nằm im tới lúc có người mở app.
 
 Mỗi phút hỏi API của bot (chỉ đọc) và báo khi:
   - bot không trả lời, hoặc không xử lý nến (last_process quá 3 phút), hoặc không ở trạng thái running
@@ -7,8 +7,8 @@ Mỗi phút hỏi API của bot (chỉ đọc) và báo khi:
   - log có dòng ERROR/CRITICAL mới
 Báo một lần khi sự cố bắt đầu và một lần khi hết, không lặp lại mỗi phút.
 
-hub.json: "alerts": {"telegram_token": "...", "chat_id": "..."} — tạo bằng `setup --no-download --telegram`.
-Chưa có thì vẫn canh và ghi log, nhưng không gửi được đi đâu (tab Live báo thiếu cảnh báo).
+Telegram (tuỳ chọn): hub.json "alerts": {"telegram_token": "...", "chat_id": "..."} — `setup --no-download --telegram`.
+Chưa có kênh nào thì vẫn canh và ghi log, nhưng không gửi được đi đâu (tab Live báo thiếu cảnh báo).
 """
 import asyncio
 import logging
@@ -38,8 +38,8 @@ def telegram_sender(token: str, chat_id: str) -> Callable[[str], Awaitable[None]
 
 class Watchdog:
     def __init__(self, live: FtClient, send: Callable[[str], Awaitable[None]] | None,
-                 now: Callable[[], float] = time.time):
-        self.live, self.send, self.now = live, send, now
+                 has_channel: Callable[[], bool] = lambda: False, now: Callable[[], float] = time.time):
+        self.live, self.send, self.has_channel, self.now = live, send, has_channel, now
         self.fails = 0
         self.active: dict[str, str] = {}             # sự cố đang báo: khoá → nội dung
         self.no_stop: dict[int, int] = {}            # trade_id → số lần liền thấy thiếu stop
@@ -102,8 +102,9 @@ class Watchdog:
         return out
 
     async def run(self) -> None:
-        if not self.send:
-            log.warning("Chưa có kênh cảnh báo (hub.json → alerts): sự cố của bot chỉ ghi vào log hub")
+        if not self.has_channel():
+            log.warning("Chưa có kênh cảnh báo (Telegram hoặc điện thoại bật Alerts ở tab Live): "
+                        "sự cố của bot chỉ ghi vào log hub")
         while True:
             try:
                 for msg in await self.check():
