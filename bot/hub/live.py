@@ -26,33 +26,45 @@ def trade_view(t: dict) -> dict:
     return out
 
 
-def disk_demo(exchange_file: Path) -> bool | None:
+def disk_mode(mode_file: Path) -> str | None:
+    """Chế độ ghi trên đĩa, đọc từ .env của compose (setup --api ghi BOT_DB=demo/real, --dryrun xoá file).
+    Không đọc secrets/exchange.json: hub không được thấy API key sàn."""
     try:
-        return bool(json.loads(exchange_file.read_text(encoding="utf-8")).get("exchange", {}).get("demo_trading"))
-    except (OSError, ValueError):
+        text = mode_file.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return "paper"
+    except OSError:
         return None
+    for line in text.splitlines():
+        if line.startswith("BOT_DB="):
+            return {"demo": "demo", "real": "live"}.get(line.split("=", 1)[1].strip())
+    return "paper"
 
 
-def mode_of(conf: dict, exchange_file: Path) -> tuple[str, str | None]:
+NAMES = {"paper": "dry-run", "demo": "Demo", "live": "TIỀN THẬT"}
+
+
+def mode_of(conf: dict, mode_file: Path) -> tuple[str, str | None]:
     """Chế độ của process bot ĐANG CHẠY (/show_config), không phải file trên đĩa — setup --api ghi đè file
     ngay, còn bot cũ vẫn chạy tới lần `up -d` sau. Trả thêm cảnh báo khi file trên đĩa khác bot đang chạy."""
     if conf.get("dry_run"):
-        return "paper", None
-    demo = conf.get("demo_trading")
-    if demo is None:                                   # freqtrade cũ không trả demo_trading: đành đọc file
-        demo = disk_demo(exchange_file)
-        return ("demo" if demo else "live"), None
-    mode = "demo" if demo else "live"
-    on_disk = disk_demo(exchange_file)
-    if on_disk is not None and on_disk != bool(demo):
-        return mode, (f"Bot đang chạy {'Demo' if demo else 'TIỀN THẬT'} nhưng cấu hình trên đĩa là "
-                      f"{'Demo' if on_disk else 'TIỀN THẬT'} — cần `docker compose up -d` để áp dụng")
+        mode = "paper"
+    elif conf.get("demo_trading") is None:             # freqtrade cũ không trả demo_trading: đành tin file
+        d = disk_mode(mode_file)
+        return (d if d in ("demo", "live") else "live"), None
+    else:
+        mode = "demo" if conf["demo_trading"] else "live"
+    on_disk = disk_mode(mode_file)
+    if on_disk is not None and on_disk != mode:
+        return mode, (f"Bot đang chạy {NAMES[mode]} nhưng cấu hình trên đĩa là {NAMES[on_disk]} — "
+                      "cần `docker compose up -d` để áp dụng")
     return mode, None
 
 
 def router(cfg: dict) -> APIRouter:
     live = FtClient(cfg["live"])
-    exchange_file = Path(cfg.get("exchange_file", "/deploy/secrets/exchange.json"))
+    mode_file = Path(cfg.get("mode_file", "/deploy/.env"))
+    alerts_on = bool((cfg.get("alerts") or {}).get("telegram_token"))
     r = APIRouter()
 
     @r.get("/api/live")
@@ -75,11 +87,12 @@ def router(cfg: dict) -> APIRouter:
         closed.sort(key=lambda t: t.get("close_timestamp") or 0, reverse=True)
         logs = [{"t": row[1], "level": row[3], "msg": row[4][:300]}
                 for row in (ok("logs") or {}).get("logs", []) if row[3] in ("WARNING", "ERROR", "CRITICAL")]
-        mode, mode_warning = mode_of(conf, exchange_file)
+        mode, mode_warning = mode_of(conf, mode_file)
         return {
             "reachable": True,
             "mode": mode,
             "mode_warning": mode_warning,
+            "alerts": alerts_on,
             "state": conf.get("state"),
             "strategy": conf.get("strategy"),
             "timeframe": conf.get("timeframe"),

@@ -9,7 +9,8 @@
     "allowed_logins": []
   },
   "app_dir": "../..",
-  "exchange_file": "../deploy/secrets/exchange.json",
+  "mode_file": "../deploy/.env",
+  "alerts": {"telegram_token": "", "chat_id": ""},
   "data": {
     "dir": "../user_data/hub_data",
     "update_every_s": 120,

@@ -1,4 +1,5 @@
 """Kiểm thử hub (không cần freqtrade): python -m pytest bot/hub/test_hub.py"""
+import asyncio
 import base64
 import json
 import sys
@@ -178,11 +179,11 @@ def test_live_summary(tmp_path, monkeypatch):
         return responses[path]
 
     monkeypatch.setattr(tune.FtClient, "call", fake_call)
-    ex = tmp_path / "exchange.json"
-    ex.write_text(json.dumps({"exchange": {"demo_trading": True, "key": "SECRET"}}))
-    c = make_app(tmp_path, live={"api_url": "http://x", "username": "u", "password": "p"}, exchange_file=str(ex))
+    env = tmp_path / ".env"
+    env.write_text("BOT_EXTRA_CONFIG=-c x\nBOT_DB=demo\n")
+    c = make_app(tmp_path, live={"api_url": "http://x", "username": "u", "password": "p"}, mode_file=str(env))
     j = c.get("/api/live", headers=TS).json()
-    assert j["reachable"] and j["mode"] == "demo" and j["balance"]["total"] == 990.5 and j["balance"]["account_total"] == 1234.5
+    assert j["reachable"] and j["mode"] == "demo" and j["mode_warning"] is None and j["alerts"] is False and j["balance"]["total"] == 990.5 and j["balance"]["account_total"] == 1234.5
     assert j["open"][0]["stop_on_exchange"] is True and "orders" not in j["open"][0]
     assert [t["trade_id"] for t in j["closed"]] == [2, 1]
     assert j["logs"] == [{"t": 2, "level": "WARNING", "msg": "careful"}]
@@ -192,13 +193,57 @@ def test_live_summary(tmp_path, monkeypatch):
 def test_live_mode_from_running_bot(tmp_path):
     """Chế độ lấy từ bot đang chạy; file trên đĩa khác thì cảnh báo (setup --api vừa đổi, chưa up -d)."""
     import live
-    ex = tmp_path / "exchange.json"
-    ex.write_text(json.dumps({"exchange": {"demo_trading": True}}))
-    assert live.mode_of({"dry_run": True}, ex) == ("paper", None)
+    ex = tmp_path / ".env"
+    ex.write_text("BOT_DB=demo\n")
+    mode, warn = live.mode_of({"dry_run": True}, ex)
+    assert mode == "paper" and "Demo" in warn
     mode, warn = live.mode_of({"dry_run": False, "demo_trading": False}, ex)
     assert mode == "live" and "TIỀN THẬT" in warn
     assert live.mode_of({"dry_run": False, "demo_trading": True}, ex) == ("demo", None)
     assert live.mode_of({"dry_run": False}, ex) == ("demo", None)          # freqtrade cũ: đọc file
+    ex.write_text("BOT_DB=real\n")
+    assert live.mode_of({"dry_run": False, "demo_trading": False}, ex) == ("live", None)
+    ex.unlink()                                                             # setup --dryrun xoá .env
+    assert live.mode_of({"dry_run": True}, ex) == ("paper", None)
+
+
+def test_watchdog_alerts_once_and_on_recovery():
+    """Báo khi sự cố bắt đầu và khi hết; không lặp mỗi phút; thiếu stop phải thấy 2 lần liền mới báo."""
+    import alerts
+    now = [1000.0]
+    r = {"/show_config": {"state": "running", "dry_run": False}, "/health": {"last_process_ts": 995},
+         "/status": [], "/logs": {"logs": []}}
+    down = [False]
+
+    class Fake:
+        async def call(self, method, path, **kw):
+            if down[0]:
+                raise RuntimeError("connection refused")
+            return r[path]
+
+    w = alerts.Watchdog(Fake(), None, now=lambda: now[0])
+    run = lambda: asyncio.run(w.check())  # noqa: E731
+    assert run() == []
+    r["/status"] = [{"trade_id": 7, "pair": "BTC/USDT:USDT", "is_short": False, "orders": []}]
+    assert run() == []                                                      # lần 1: có thể đang dời stop
+    msgs = run()
+    assert len(msgs) == 1 and "#7" in msgs[0] and "KHÔNG có stop" in msgs[0]
+    assert run() == []                                                      # không lặp
+    r["/status"][0]["orders"] = [{"ft_order_side": "stoploss", "status": "open"}]
+    assert run()[0].startswith("✅")
+    now[0] = 1000 + 400                                                     # bot kẹt
+    assert "không xử lý" in run()[0]
+    r["/health"]["last_process_ts"] = now[0]
+    run()
+    r["/logs"]["logs"] = [["d", now[0] + 1, "x", "ERROR", "Unable to place a stoploss order"],
+                          ["d", now[0] + 2, "x", "WARNING", "meh"]]
+    assert run() == ["ERROR: Unable to place a stoploss order"]
+    assert run() == []                                                      # log cũ không báo lại
+    down[0] = True
+    assert run() == [] and run() == []                                      # restart ngắn: chưa báo
+    assert "không trả lời" in run()[0]
+    down[0] = False
+    assert run()[0].startswith("✅")
 
 
 def test_validate_keeps_live_values_and_rejects_off_step():

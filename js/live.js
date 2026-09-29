@@ -63,6 +63,7 @@ export function createLive({ root, esc, fmt, sign, cls }) {
     root.innerHTML = `
       <div class="card offline" hidden><p class="hint warn"></p></div>
       ${j.mode_warning ? `<div class="card"><p class="hint warn">${esc(j.mode_warning)}</p></div>` : ""}
+      ${j.alerts === false && j.mode !== "paper" ? `<div class="card"><p class="hint warn">No alerts set up: if the bot stops or loses its stop order, nobody is told. Run <code>docker compose run --rm setup --no-download --telegram</code> on the server.</p></div>` : ""}
       <div class="card hero">
         <div class="hero-top">
           <div>

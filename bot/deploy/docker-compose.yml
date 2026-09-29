@@ -10,7 +10,10 @@ x-ft: &ft
   restart: unless-stopped
   volumes:
     - "../user_data:/freqtrade/user_data"
-    - "./:/deploy"
+    - "./:/deploy:ro"                       # chỉ đọc: container không sửa được cấu hình/compose của chính nó
+
+# Chỉ bot live thấy key sàn (secrets/exchange.json). paper/lab: che secrets/ và hub.json bằng thư mục rỗng /
+# file rỗng, rồi chỉ gắn đúng file mật khẩu API của nó.
 
 services:
   live:
@@ -28,6 +31,12 @@ services:
     <<: *ft                                 # (bot live ở chế độ Demo lấy nến demo-fapi, khác sàn thật)
     container_name: donchian-paper
     ports: ["127.0.0.1:8082:8082"]
+    volumes:
+      - "../user_data:/freqtrade/user_data"
+      - "./:/deploy:ro"
+      - {type: tmpfs, target: /deploy/secrets, tmpfs: {mode: 0o755}}
+      - "/dev/null:/deploy/hub.json:ro"
+      - "./secrets/paper.json:/deploy/secrets/paper.json:ro"
     command: >
       trade
       --logfile /freqtrade/user_data/logs/paper.log
@@ -39,6 +48,12 @@ services:
     <<: *ft
     container_name: donchian-lab
     ports: ["127.0.0.1:8081:8081"]
+    volumes:
+      - "../user_data:/freqtrade/user_data"
+      - "./:/deploy:ro"
+      - {type: tmpfs, target: /deploy/secrets, tmpfs: {mode: 0o755}}
+      - "/dev/null:/deploy/hub.json:ro"
+      - "./secrets/lab.json:/deploy/secrets/lab.json:ro"
     command: >
       webserver
       --logfile /freqtrade/user_data/logs/lab.log
@@ -50,9 +65,11 @@ services:
     ports: ["127.0.0.1:8090:8090"]
     volumes:
       - "../user_data:/freqtrade/user_data"
-      - "./:/deploy"
+      - "./:/deploy:ro"                       # hub.json + .env (chế độ Demo/Thật); không có key sàn
+      - {type: tmpfs, target: /deploy/secrets, tmpfs: {mode: 0o755}}
       - "../hub:/hub:ro"
       - "../..:/app:ro"                       # mã app; hub chỉ phục vụ index.html, js/, css/... (xem hub/server.py)
+      - {type: tmpfs, target: /app/bot/deploy/secrets, tmpfs: {mode: 0o755}}
     entrypoint: ["python", "/hub/server.py"]
     command: ["-c", "/deploy/hub.json"]
     depends_on: [live, lab]
@@ -61,6 +78,7 @@ services:
     <<: *ft
     restart: "no"
     profiles: ["setup"]
+    volumes: ["../user_data:/freqtrade/user_data", "./:/deploy"]   # ghi secrets/, hub.json, .env
     entrypoint: ["python", "/deploy/setup.py"]
     command: []
 

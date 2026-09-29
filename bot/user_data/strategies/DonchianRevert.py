@@ -42,7 +42,10 @@ class DonchianRevert(IStrategy):
     startup_candle_count = 200
     can_short = True
     minimal_roi = {"0": 100}          # không chốt lời cố định
-    stoploss = -0.30                  # lưới an toàn; SL thật nằm trong custom_stoploss
+    # Lưới an toàn, tính trên ký quỹ (giá lệch 15%/đòn bẩy): freqtrade đặt stop này lên sàn trước, rồi
+    # custom_stoploss kéo về 1R. Stop chỉ được dời lại gần giá, không nới ra, nên leverage() giữ
+    # 1R × đòn bẩy < 90% mức này. 1R lớn nhất 2021 → 2026 ≈ 11.7% giá (p99 5.6%).
+    stoploss = -0.15
     use_custom_stoploss = True
     use_custom_roi = True             # chốt lời cố định theo R (tp_r); tắt khi tp_r = 0
     use_exit_signal = False
@@ -67,6 +70,10 @@ class DonchianRevert(IStrategy):
     # Bật khi chạy nhiều coin cùng lúc: luôn dùng max_lev để ký quỹ mỗi lệnh nhỏ (rủi ro/lệnh không đổi,
     # vì khối lượng vẫn tính theo 1R). Tắt = đòn bẩy tối thiểu cần thiết (mặc định, 1 coin).
     fixed_lev = BooleanParameter(default=False, space="sell", optimize=False)
+
+    def __init__(self, config: dict) -> None:
+        super().__init__(config)
+        self._pending_risk: dict[str, float] = {}      # 1R của lệnh vừa gửi, chờ khớp (order_filled)
 
     def populate_indicators(self, df: DataFrame, metadata: dict) -> DataFrame:
         hh = df["high"].rolling(self.dc_period.value).max()
@@ -106,19 +113,36 @@ class DonchianRevert(IStrategy):
 
     def leverage(self, pair, current_time, current_rate, proposed_leverage, max_leverage,
                  entry_tag, side, **kwargs) -> float:
-        if self.fixed_lev.value:
-            return float(min(self.max_lev.value, max_leverage))
         r_pct = self._signal_atr(pair, current_time) * self.r_atr.value / current_rate
+        # stop lưới an toàn (stoploss/đòn bẩy) phải xa hơn 1R, không thì nó chặn stop 1R của custom_stoploss
+        cap = max(1, math.floor(0.9 * abs(self.stoploss) / r_pct))
+        if self.fixed_lev.value:
+            return float(min(self.max_lev.value, math.floor(max_leverage), cap))
         # Đòn bẩy nguyên, làm tròn LÊN: Binance làm tròn xuống đòn bẩy lẻ (floor_leverage), khi đó ký quỹ
         # cần > vốn và sàn từ chối lệnh. Notional = stake × leverage không đổi nên rủi ro vẫn đúng 1R.
         need = math.ceil(self.risk_pct.value / 100 / r_pct - 1e-9)
-        return float(min(max(need, 1), self.max_lev.value, math.floor(max_leverage)))
+        return float(min(max(need, 1), self.max_lev.value, math.floor(max_leverage), cap))
 
     def custom_stake_amount(self, pair, current_time, current_rate, proposed_stake, min_stake,
                             max_stake, leverage, entry_tag, side, **kwargs) -> float:
         equity = self.wallets.get_total_stake_amount()
-        r_pct = self._signal_atr(pair, current_time) * self.r_atr.value / current_rate
-        return float(min(equity * self.risk_pct.value / 100 / r_pct / leverage, max_stake))
+        risk = self._signal_atr(pair, current_time) * self.r_atr.value
+        self._pending_risk[pair] = risk              # order_filled lưu lại vào lệnh
+        return float(min(equity * self.risk_pct.value / 100 / (risk / current_rate) / leverage, max_stake))
+
+    def order_filled(self, pair: str, trade: Trade, order, current_time: datetime, **kwargs) -> None:
+        """Lưu 1R vào lệnh ngay khi lệnh vào khớp. Nếu không, custom_stoploss phải tính lại từ nến đang
+        phân tích — lúc bot vừa khởi động (chưa có nến) hay lệnh mở quá ~7 ngày thì không tính được, và
+        stop trên sàn kẹt ở lưới an toàn thay vì 1R."""
+        if order.ft_order_side != trade.entry_side or trade.get_custom_data("risk") is not None:
+            return
+        r = self._pending_risk.pop(pair, None)
+        if r is None:
+            try:
+                r = self._signal_atr(pair, trade.open_date_utc) * self.r_atr.value
+            except (IndexError, KeyError):
+                return                                   # chưa có nến: custom_stoploss tính sau
+        trade.set_custom_data("risk", r)
 
     def custom_stoploss(self, pair: str, trade: Trade, current_time: datetime, current_rate: float,
                         current_profit: float, after_fill: bool, **kwargs):

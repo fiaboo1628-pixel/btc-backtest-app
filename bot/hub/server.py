@@ -34,6 +34,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Resp
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+import alerts  # noqa: E402
 import candles  # noqa: E402
 import live  # noqa: E402
 import tune  # noqa: E402
@@ -53,7 +54,7 @@ def load_cfg(path: Path) -> dict:
     for side in ("lab", "live"):
         if side in cfg and "strategy_dir" in cfg[side]:
             cfg[side]["strategy_dir"] = Path(rel(cfg[side]["strategy_dir"]))
-    for key in ("app_dir", "exchange_file"):
+    for key in ("app_dir", "mode_file"):
         if key in cfg:
             cfg[key] = str(rel(cfg[key]))
     if "dir" in cfg.get("data", {}):
@@ -126,16 +127,18 @@ def create_app(cfg: dict) -> FastAPI:
     h = cfg.get("hub", {})
     app_dir = Path(cfg.get("app_dir", HERE.parent.parent)).resolve()
     features = {"data": False, "live": False, "tune": False}
-    store = None
+    store = watchdog = None
     proxies = tailscale_proxies(h)
     if h.get("trust_tailscale", True) and not h.get("allowed_logins"):
         log.warning("allowed_logins trống: mọi tài khoản Tailscale thấy được máy này đều vào được hub")
 
     @contextlib.asynccontextmanager
     async def lifespan(_app):
-        task = asyncio.create_task(store.run()) if store and store.sets else None
+        tasks = [asyncio.create_task(store.run())] if store and store.sets else []
+        if watchdog:
+            tasks.append(asyncio.create_task(watchdog.run()))
         yield
-        if task:
+        for task in tasks:
             task.cancel()
 
     app = FastAPI(title="Hub", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
@@ -159,6 +162,9 @@ def create_app(cfg: dict) -> FastAPI:
     if "live" in cfg:
         app.include_router(live.router(cfg))
         features["live"] = True
+        a = cfg.get("alerts") or {}
+        send = alerts.telegram_sender(a["telegram_token"], a["chat_id"]) if a.get("telegram_token") else None
+        watchdog = alerts.Watchdog(tune.FtClient(cfg["live"]), send)
     if "lab" in cfg and "live" in cfg:
         try:
             app.include_router(tune.router(cfg))
