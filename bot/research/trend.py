@@ -109,6 +109,10 @@ def lookahead(pairs: list[str], a) -> str:
     sdir = work / "strategies"
     sdir.mkdir()
     shutil.copy(SDIR / "TrendBreakout.py", sdir)
+    # fixed_lev như khi nghiên cứu. Đòn bẩy tự tính + ví 1 tỷ của lookahead-analysis + market giả (không giới hạn vị thế)
+    # làm vài lệnh ăn hết ví, lần chạy đủ cặp bỏ lệnh mà lần chạy cắt một cặp lại vào → báo nhầm "nhìn trước".
+    (sdir / "TrendBreakout.json").write_text(json.dumps(
+        {"strategy_name": "TrendBreakout", "params": {"sell": {"fixed_lev": True}}}))
     cfg = json.loads((ROOT / "cfg_fut.json").read_text())
     cfg["exchange"]["pair_whitelist"] = [f"{p}/USDT:USDT" for p in pairs]
     cfg.update(max_open_trades=len(pairs), timeframe="4h", fee=a.fee, dry_run_wallet=START)
