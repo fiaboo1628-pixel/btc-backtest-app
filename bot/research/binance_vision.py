@@ -5,6 +5,7 @@ như api.binance.com) và ghi ra định dạng freqtrade futures:
 
   python research/binance_vision.py --pairs BTC ETH SOL --start 2020-10 --end 2026-08 --out user_data/data/binance
   python research/binance_vision.py --pairs BTC ETH --tf 15m 1h 4h --end 2026-08
+  python research/binance_vision.py --pairs BTC --metrics --end 2026-08     # thêm OI, long/short, taker (5m)
 """
 import argparse
 import io
@@ -17,6 +18,7 @@ from urllib.request import urlopen
 import pandas as pd
 
 BASE = "https://data.binance.vision/data/futures/um/monthly"
+DAILY = "https://data.binance.vision/data/futures/um/daily"
 KCOLS = ["date", "open", "high", "low", "close", "volume"]
 
 
@@ -71,6 +73,25 @@ def funding(sym: str, ms: list[str], grid: pd.Series) -> pd.DataFrame:
     return f
 
 
+def metrics(sym: str, start: str, end: str) -> pd.DataFrame:
+    """Open interest, tỉ lệ long/short (top trader và toàn sàn), tỉ lệ khối lượng taker mua/bán — mỗi 5 phút.
+    Chỉ có file theo ngày; Binance bắt đầu công bố khoảng cuối 2021, ngày thiếu trả về 404 và bị bỏ qua."""
+    days = pd.date_range(f"{start}-01", pd.Period(end, "M").end_time.normalize(), freq="D")
+    urls = [f"{DAILY}/metrics/{sym}/{sym}-metrics-{d:%Y-%m-%d}.zip" for d in days]
+    with ThreadPoolExecutor(16) as ex:
+        parts = [p for p in ex.map(fetch_csv, urls) if p is not None]
+    if not parts:
+        return pd.DataFrame()
+    d = pd.concat(parts)
+    d.columns = [c.strip() for c in d.columns]
+    d["date"] = pd.to_datetime(d["create_time"], utc=True).astype("datetime64[ms, UTC]")
+    cols = ["sum_open_interest", "sum_open_interest_value", "count_toptrader_long_short_ratio",
+            "sum_toptrader_long_short_ratio", "count_long_short_ratio", "sum_taker_long_short_vol_ratio"]
+    d = d[["date"] + [c for c in cols if c in d.columns]]
+    d[d.columns[1:]] = d[d.columns[1:]].astype(float)
+    return d.drop_duplicates("date").sort_values("date").reset_index(drop=True)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--pairs", nargs="+", default=["BTC"])
@@ -78,6 +99,7 @@ def main() -> None:
     ap.add_argument("--end", required=True, help="tháng cuối đã trọn vẹn, ví dụ 2026-08")
     ap.add_argument("--tf", nargs="+", default=["15m"])
     ap.add_argument("--out", default="user_data/data/binance")
+    ap.add_argument("--metrics", action="store_true", help="tải thêm OI / long-short / taker 5m (file -5m-metrics.feather)")
     a = ap.parse_args()
     out = Path(a.out) / "futures"
     out.mkdir(parents=True, exist_ok=True)
@@ -98,8 +120,14 @@ def main() -> None:
         mark = klines(sym, "markPriceKlines", "1h", ms)
         mark.to_feather(out / f"{base}_USDT_USDT-1h-mark.feather")
         funding(sym, ms, mark["date"]).to_feather(out / f"{base}_USDT_USDT-1h-funding_rate.feather")
+        extra = ""
+        if a.metrics:
+            m = metrics(sym, a.start, a.end)
+            if len(m):
+                m.to_feather(out / f"{base}_USDT_USDT-5m-metrics.feather")
+                extra = f", {len(m)} dòng metrics 5m từ {m.date.iloc[0]:%Y-%m-%d}"
         print(f"{sym}: {', '.join(got)} ({span}), "
-              f"{len(mark)} nến mark 1h")
+              f"{len(mark)} nến mark 1h{extra}")
 
 
 if __name__ == "__main__":

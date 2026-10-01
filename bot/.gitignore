@@ -11,3 +11,5 @@ user_data/strategies/param_backups/
 user_data/hub_data/
 robustness_out/
 data/
+ml_gate_out/
+robustness_trend_out/
