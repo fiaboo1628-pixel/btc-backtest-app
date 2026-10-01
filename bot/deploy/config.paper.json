@@ -1,5 +1,5 @@
 {
-  "bot_name": "DonchianRevert-paper",
+  "bot_name": "TrendBreakout-paper",
   "dry_run": true,
   "dry_run_wallet": 10000,
   "api_server": { "listen_port": 8082 }

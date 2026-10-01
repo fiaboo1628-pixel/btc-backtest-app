@@ -1,8 +1,8 @@
 """
 Báo cáo tuần: bot có giữ được lợi thế của backtest ngoài dữ liệu đã dùng để chọn tham số không
-(bot/research/robustness_2026-10.md). Thứ Hai 08:00 giờ VN gửi tóm tắt về điện thoại; GET /api/weekly xem bất cứ lúc nào.
+(bot/research/robustness_trend_2026-10.md). Thứ Hai 08:00 giờ VN gửi tóm tắt về điện thoại; GET /api/weekly xem bất cứ lúc nào.
 
-  - Demo (live) và paper: số lệnh, thắng, profit factor, lãi, sụt vốn — so với backtest Binance 2020 → 2026.
+  - Demo (live) và paper: số lệnh, thắng, profit factor, lãi, sụt vốn — so với backtest TrendBreakout 5 coin.
   - Demo so với paper: paper chạy dry-run trên nến sàn thật, cùng cách freqtrade backtest, nên chính là "lệnh mô phỏng".
     Lệnh Demo không có ở paper (hoặc ngược lại) là do nến demo-fapi khác sàn thật hoặc khớp lệnh khác.
 """
@@ -13,10 +13,11 @@ from typing import Awaitable, Callable
 
 log = logging.getLogger("hub.weekly")
 
-# Backtest freqtrade, Binance BTCUSDT perpetual 01/2020 → 08/2026 (378 lệnh / 80 tháng)
-EXPECT = {"per_month": 4.7, "win_pct": 42, "pf": 1.22}
+# Backtest freqtrade TrendBreakout 5 coin 04/2020 → 09/2026 (1470 lệnh / 78 tháng). PF 1.55 lạc quan (5 coin chọn
+# sau khi đã thấy kết quả) — 10 coin cho 1.33, nên verdict lấy 1.1 làm mốc "đúng kỳ vọng".
+EXPECT = {"per_month": 19, "win_pct": 32, "pf": 1.55}
 MIN_TRADES = 30          # ít hơn thì PF/tỉ lệ thắng chủ yếu là nhiễu
-MATCH_S = 15 * 60        # cùng chiều, giờ vào lệch ≤ 1 nến 15m thì coi là cùng một tín hiệu
+MATCH_S = 4 * 3600       # cùng cặp, cùng chiều, giờ vào lệch ≤ 1 nến 4h thì coi là cùng một tín hiệu
 VN = timezone(timedelta(hours=7))
 
 
@@ -39,11 +40,11 @@ def stats(trades: list[dict], start: float) -> dict:
 
 
 def match(a: list[dict], b: list[dict]) -> int:
-    """Số lệnh của a có lệnh cùng chiều ở b, giờ vào lệch ≤ MATCH_S (mỗi lệnh b chỉ ghép một lần)."""
+    """Số lệnh của a có lệnh cùng cặp, cùng chiều ở b, giờ vào lệch ≤ MATCH_S (mỗi lệnh b chỉ ghép một lần)."""
     used, n = set(), 0
     for t in a:
         for i, u in enumerate(b):
-            if (i not in used and u.get("is_short") == t.get("is_short")
+            if (i not in used and u.get("pair") == t.get("pair") and u.get("is_short") == t.get("is_short")
                     and abs(u["open_timestamp"] - t["open_timestamp"]) <= MATCH_S * 1000):
                 used.add(i)
                 n += 1
@@ -58,7 +59,7 @@ def verdict(s: dict) -> str:
         return "đúng kỳ vọng backtest"
     if s["pf"] >= 1:
         return "lãi nhưng yếu hơn backtest"
-    return "đang thua — chạm 60 lệnh mà PF < 1 thì bot tự dừng"
+    return "đang thua — sụt vốn quá 15% thì bot tự dừng"
 
 
 def _line(name: str, s: dict) -> str:

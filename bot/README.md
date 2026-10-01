@@ -1,4 +1,17 @@
-# DonchianRevert — BTC M15 mean reversion (Binance USDT-M Futures)
+# Bot Binance USDT-M Futures
+
+**Từ 10/2026 bot chạy TrendBreakout** (`user_data/strategies/TrendBreakout.py`): breakout kênh Donchian 4h, 5 coin
+BTC ETH SOL XRP DOGE, vào khi đóng cửa vượt đỉnh/đáy 20 nến (lọc EMA200), thoát khi thủng kênh 10 nến, SL 2×ATR,
+rủi ro 0.25%/lệnh, đòn bẩy cố định x5, tự dừng khi sụt vốn > 15%. Backtest 04/2020 → 09/2026 (chi tiết 15m, vốn 1000):
+1470 lệnh, PF 1.55, 20.5%/năm, max DD 11% — lạc quan vì 5 coin chọn sau khi thấy kết quả (10 coin: PF 1.33, DD 23%).
+Kiểm tra độ bền: [`research/robustness_trend_2026-10.md`](research/robustness_trend_2026-10.md). Vốn từ 1000 USDT là đủ.
+Tự backtest: trang Chỉnh tham số `/tune/` của hub (LAB, phí + trượt 0.08%/chiều). Nút "Send to bot" của app chỉ hợp
+với DonchianRevert — với TrendBreakout hub từ chối (tham số không tồn tại), không đổi gì.
+
+DonchianRevert (bên dưới) đã ngưng: walk-forward thất bại ([`research/robustness_2026-10.md`](research/robustness_2026-10.md)).
+Lịch sử lệnh cũ: `user_data/demo-donchian.sqlite`, `user_data/paper-donchian.sqlite`.
+
+# DonchianRevert — BTC M15 mean reversion (đã ngưng 10/2026)
 
 ## Chạy bot
 - **Máy nhà / VPS (Docker)** hoặc **GitHub Codespaces** (không cần gõ lệnh): xem [`deploy/README.md`](deploy/README.md).
