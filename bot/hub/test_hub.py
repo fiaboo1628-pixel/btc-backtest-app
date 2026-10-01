@@ -327,6 +327,24 @@ def test_validate_keeps_live_values_and_rejects_off_step():
     assert tune.validate(schema, {"r_atr": 2.2000000000000002})["sell"]["r_atr"] == 2.2
 
 
+def test_tune_live_shows_coins_mode_and_data(tmp_path, monkeypatch):
+    responses = {"/show_config": {"state": "running", "dry_run": False, "demo_trading": True, "timeframe": "4h",
+                                  "max_open_trades": 5, "strategy": "TrendBreakout"},
+                 "/status": [], "/profit": {"profit_all_percent": 0}, "/whitelist": {"whitelist": ["BTC/USDT:USDT"]}}
+
+    async def fake_call(self, method, path, **kw):
+        return responses[path]
+
+    monkeypatch.setattr(tune.FtClient, "call", fake_call)
+    monkeypatch.setattr(tune, "load_schema", lambda *a: [])
+    lab = {"api_url": "http://x", "username": "u", "password": "p", "strategy_dir": tmp_path / "strategies_lab"}
+    c = make_app(tmp_path, strategy="TrendBreakout", lab=lab, live={**lab, "strategy_dir": tmp_path / "s"},
+                 mode_file=str(tmp_path / "none.env"))
+    j = c.get("/api/tune/live", headers=TS).json()
+    assert (j["mode"], j["pairs"], j["timeframe"], j["max_open_trades"]) == ("Demo", ["BTC/USDT:USDT"], "4h", 5)
+    assert j["data"] == [{"pair": "BTC/USDT:USDT", "tf": tf, "from": None, "to": None} for tf in ("4h", "15m")]
+
+
 def test_live_unreachable(tmp_path, monkeypatch):
     async def boom(self, method, path, **kw):
         raise tune.HTTPException(502, "down")

@@ -42,8 +42,8 @@ LABELS: dict[str, tuple[str, str]] = {
     "tp_r": ("Chốt lời cố định (R)", "Chốt lời khi lãi đạt ngần này R; 0 = tắt."),
     "risk_pct": ("Rủi ro mỗi lệnh (% vốn)", "Số % vốn mất nếu lệnh dính stoploss ban đầu."),
     "max_lev": ("Đòn bẩy tối đa", "Giới hạn đòn bẩy khi tính khối lượng theo rủi ro."),
-    "halt_on": ("Tự dừng khi thua nhiều", "Ngừng vào lệnh mới khi sụt vốn > 15% (DonchianRevert: thêm profit factor "
-                                          "< 1 sau 60 lệnh). Đã dừng thì tắt để chạy tiếp (sau khi xem lại)."),
+    "halt_on": ("Tự dừng khi thua nhiều", "Ngừng vào lệnh mới khi sụt vốn > 15%. Đã dừng thì tắt để chạy tiếp "
+                                          "(sau khi xem lại)."),
 }
 SPACE_TITLES = {"buy": "Vào lệnh", "sell": "Thoát lệnh & rủi ro"}
 
@@ -159,6 +159,23 @@ class FtClient:
         return r.json()
 
 
+def data_ranges(data_dir: Path, pairs: list[str], tfs: list[str]) -> list[dict]:
+    """Nến LAB có sẵn cho từng cặp/khung: ngày đầu, ngày cuối (None = chưa có file)."""
+    out = []
+    for pair in pairs:
+        for tf in tfs:
+            f = data_dir / f"{pair.replace('/', '_').replace(':', '_')}-{tf}-futures.feather"
+            row = {"pair": pair, "tf": tf, "from": None, "to": None}
+            if f.is_file():
+                import pandas as pd                  # có sẵn trong image freqtrade
+
+                d = pd.read_feather(f, columns=["date"])["date"]
+                if len(d):
+                    row.update({"from": d.iloc[0].strftime("%Y-%m-%d"), "to": d.iloc[-1].strftime("%Y-%m-%d %H:%M")})
+            out.append(row)
+    return out
+
+
 def summarize(res: dict, strategy: str) -> dict:
     s = res["strategy"][strategy]
     eq, bal = [], s["starting_balance"]
@@ -203,6 +220,8 @@ def router(cfg: dict) -> APIRouter:
     live_dir: Path = cfg["live"]["strategy_dir"]
     schema = load_schema(lab_dir / f"{strat}.py", strat)
     lab, live = FtClient(cfg["lab"]), FtClient(cfg["live"])
+    mode_file = Path(cfg.get("mode_file", "/deploy/.env"))
+    data_dir = lab_dir.parent / "data" / "binance" / "futures"      # datadir mặc định của LAB (freqtrade)
     state: dict[str, Any] = {"pending": None, "history": [], "failed": False}
     lock = asyncio.Lock()
     r = APIRouter(prefix="/api/tune")
@@ -275,16 +294,27 @@ def router(cfg: dict) -> APIRouter:
 
     @r.get("/live")
     async def live_status():
+        from live import NAMES, mode_of      # live.py import tune.py: import ở đây tránh vòng lặp
+
         try:
-            conf, trades, profit = await asyncio.gather(
+            conf, trades, profit, wl = await asyncio.gather(
                 live.call("GET", "/show_config"), live.call("GET", "/status"),
-                live.call("GET", "/profit"))
+                live.call("GET", "/profit"), live.call("GET", "/whitelist"))
         except (HTTPException, httpx.HTTPError) as e:
             return {"reachable": False, "error": str(getattr(e, "detail", e))[:200]}
+        mode, _ = mode_of(conf, mode_file)
+        pairs = wl.get("whitelist", [])
+        tf = conf.get("timeframe")
         return {
             "reachable": True,
             "state": conf.get("state"),
             "dry_run": conf.get("dry_run"),
+            "mode": NAMES[mode],
+            "pairs": pairs,
+            "timeframe": tf,
+            "max_open_trades": conf.get("max_open_trades"),
+            "data_dir": "bot/user_data/data/binance/futures",
+            "data": await asyncio.to_thread(data_ranges, data_dir, pairs, [tf, "15m"] if tf != "15m" else [tf]),
             "strategy": conf.get("strategy"),
             "open_trades": len(trades),
             "profit_pct": profit.get("profit_all_percent"),
