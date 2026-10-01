@@ -146,7 +146,7 @@ def features(mk: fs.Market, datadir: str, base: str) -> pd.DataFrame:
         f[f"pos_{n}"] = (close - ll) / (hh - ll)
     f["hour"] = t.hour
     f["dow"] = t.dayofweek
-    close_t = (t + pd.Timedelta(minutes=15)).to_numpy()
+    close_t = pd.Series(t + pd.Timedelta(minutes=15))                  # giờ đóng nến, tz-aware
 
     d = Path(datadir) / "futures"
     fr = pd.read_feather(d / f"{base}_USDT_USDT-1h-funding_rate.feather")
@@ -177,7 +177,7 @@ def features(mk: fs.Market, datadir: str, base: str) -> pd.DataFrame:
         g["ls_top_chg_24h"] = np.log(g.ls_top_sum / g.ls_top_sum.shift(288))
         g["taker_chg_24h"] = np.log(g.taker / g.taker.shift(288))
         # metrics tại T mô tả trạng thái lúc T; chỉ dùng mốc ≤ giờ đóng nến − 5 phút để chừa độ trễ công bố
-        f = pd.merge_asof(f.assign(_t=close_t - np.timedelta64(5, "m")), g, left_on="_t", right_on="date",
+        f = pd.merge_asof(f.assign(_t=close_t - pd.Timedelta(minutes=5)), g, left_on="_t", right_on="date",
                           suffixes=("", "_m")).drop(columns=["date_m", "_t"])
         log(f"metrics: {len(m)} dòng, {m.date.iloc[0]:%Y-%m-%d} → {m.date.iloc[-1]:%Y-%m-%d}")
     else:
