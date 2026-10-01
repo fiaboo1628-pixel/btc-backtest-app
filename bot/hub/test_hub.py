@@ -407,3 +407,39 @@ def test_push_subscribe_persists_and_drops_gone_devices(tmp_path, monkeypatch):
     claims = sent[0][1]["Authorization"].split("t=")[1].split(",")[0].split(".")[1]
     assert json.loads(push.unb64u(claims))["sub"] == "https://hub.example.ts.net"
     assert c.get("/api/live", headers=TS).status_code in (200, 502)          # router live vẫn gắn được
+
+
+def test_weekly_report():
+    import weekly
+    from datetime import datetime, timezone
+
+    def tr(open_min, pnl, short=False):
+        return {"is_open": False, "is_short": short, "open_timestamp": open_min * 60_000,
+                "close_timestamp": (open_min + 60) * 60_000, "profit_abs": pnl}
+
+    s = weekly.stats([tr(0, 100), tr(100, -150), tr(200, 50), {"is_open": True}], 1000)
+    assert (s["n"], s["wins"], round(s["pf"], 3), s["pnl"]) == (3, 2, 1.0, 0)
+    assert round(s["dd_pct"], 2) == round(150 / 1100 * 100, 2)
+    assert "chưa đủ" in weekly.verdict(s)
+    # cùng chiều, lệch ≤ 15 phút mới ghép; mỗi lệnh paper chỉ ghép một lần
+    assert weekly.match([tr(0, 1), tr(10, 1), tr(500, 1, short=True)], [tr(15, 1), tr(500, 1)]) == 1
+    assert weekly.next_run(datetime(2026, 10, 1, 12, tzinfo=timezone.utc)) == datetime(2026, 10, 5, 1, tzinfo=timezone.utc)
+    assert weekly.next_run(datetime(2026, 10, 5, 1, tzinfo=timezone.utc)) == datetime(2026, 10, 12, 1, tzinfo=timezone.utc)
+
+    class Fake:
+        def __init__(self, trades, start=0): self.trades, self.start = trades, start
+        async def call(self, method, path, **kw):
+            return {"/trades": {"trades": self.trades}, "/balance": {"starting_capital": 1000},
+                    "/profit": {"bot_start_timestamp": self.start}}[path]
+
+    class Down:
+        async def call(self, *a, **kw): raise RuntimeError("timeout")
+
+    out = asyncio.run(weekly.build(Fake([tr(0, 10), tr(300, -5)]), Fake([tr(5, 8)])))
+    assert out["match"] == {"demo": 2, "paper": 1, "both": 1}
+    # Demo chạy trước paper: lệnh lúc paper chưa chạy không tính vào phần so
+    out = asyncio.run(weekly.build(Fake([tr(0, 10), tr(300, -5)]), Fake([tr(305, -4)], start=200 * 60_000)))
+    assert out["match"] == {"demo": 1, "paper": 1, "both": 1}
+    assert "Demo: 2 lệnh" in out["text"] and "PF 2.00" in out["text"]
+    out = asyncio.run(weekly.build(Fake([]), Down()))
+    assert "Paper: không đọc được" in out["text"] and "match" not in out

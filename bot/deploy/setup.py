@@ -88,6 +88,7 @@ def write_hub(creds: dict) -> dict:
                            "strategy_dir": str(USER_DATA / "strategies_lab")})
     cfg.setdefault("live", {"api_url": "http://live:8080", **_login(creds["live"]),
                             "strategy_dir": str(USER_DATA / "strategies")})
+    cfg.setdefault("paper", {"api_url": "http://paper:8082", **_login(creds["paper"])})   # báo cáo tuần (weekly.py)
     write_json(hub, cfg)
     if src == old:
         old.unlink()
