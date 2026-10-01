@@ -9,3 +9,5 @@ user_data/strategies_lab/
 user_data/strategies/DonchianRevert.json
 user_data/strategies/param_backups/
 user_data/hub_data/
+robustness_out/
+data/
