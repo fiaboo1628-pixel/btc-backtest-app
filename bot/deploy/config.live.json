@@ -1,5 +1,5 @@
 {
-  "bot_name": "DonchianRevert-dryrun",
+  "bot_name": "TrendBreakout-dryrun",
   "initial_state": "running",
   "force_entry_enable": true,
   "strategy_path": "/freqtrade/user_data/strategies",

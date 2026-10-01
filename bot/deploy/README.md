@@ -1,6 +1,6 @@
 # Paper trading (dry-run) trên máy nhà
 
-Chạy DonchianRevert bằng giá Binance Futures thật nhưng **lệnh giả, ví ảo 1000 USDT, không cần API key**.
+Chạy chiến lược của bot (TrendBreakout, `config.base.json`) bằng giá Binance Futures thật nhưng **lệnh giả, ví ảo 1000 USDT, không cần API key**.
 Gồm 3 phần, chạy bằng Docker (Windows, Mac, Linux đều được):
 
 | Dịch vụ | Cổng | Việc |

@@ -413,16 +413,17 @@ def test_weekly_report():
     import weekly
     from datetime import datetime, timezone
 
-    def tr(open_min, pnl, short=False):
-        return {"is_open": False, "is_short": short, "open_timestamp": open_min * 60_000,
+    def tr(open_min, pnl, short=False, pair="BTC/USDT:USDT"):
+        return {"is_open": False, "is_short": short, "pair": pair, "open_timestamp": open_min * 60_000,
                 "close_timestamp": (open_min + 60) * 60_000, "profit_abs": pnl}
 
     s = weekly.stats([tr(0, 100), tr(100, -150), tr(200, 50), {"is_open": True}], 1000)
     assert (s["n"], s["wins"], round(s["pf"], 3), s["pnl"]) == (3, 2, 1.0, 0)
     assert round(s["dd_pct"], 2) == round(150 / 1100 * 100, 2)
     assert "chưa đủ" in weekly.verdict(s)
-    # cùng chiều, lệch ≤ 15 phút mới ghép; mỗi lệnh paper chỉ ghép một lần
+    # cùng cặp, cùng chiều, lệch ≤ 1 nến 4h mới ghép; mỗi lệnh paper chỉ ghép một lần
     assert weekly.match([tr(0, 1), tr(10, 1), tr(500, 1, short=True)], [tr(15, 1), tr(500, 1)]) == 1
+    assert weekly.match([tr(0, 1, pair="ETH/USDT:USDT"), tr(500, 1)], [tr(0, 1), tr(741, 1)]) == 0
     assert weekly.next_run(datetime(2026, 10, 1, 12, tzinfo=timezone.utc)) == datetime(2026, 10, 5, 1, tzinfo=timezone.utc)
     assert weekly.next_run(datetime(2026, 10, 5, 1, tzinfo=timezone.utc)) == datetime(2026, 10, 12, 1, tzinfo=timezone.utc)
 

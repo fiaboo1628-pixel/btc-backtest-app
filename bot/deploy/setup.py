@@ -14,7 +14,7 @@ Việc làm:
     (lộ trong `ps` và lịch sử shell).
   - hub.json: cấu hình hub — app backtest, tab Live, Chỉnh tham số, nến trên máy chủ (thay cho tuner.json cũ)
   - chép chiến lược sang user_data/strategies_lab/ cho LAB
-  - tải nến 15m BTC/USDT:USDT futures từ 2021 (kèm funding) để LAB backtest được
+  - tải nến các cặp trong config.base.json (khung chiến lược + 15m) từ 2021 (kèm funding) để LAB backtest được
   - --api: cho bot vào lệnh thật trên sàn bằng API key (hỏi Demo hay Thật; key không hiện lên màn hình).
     Demo và tiền thật chạy cùng một cấu hình, chỉ khác bộ key: lên tiền thật = chạy lại --api với key thật.
   - --dryrun: quay về dry-run (lệnh giả trong freqtrade, không cần key)
@@ -38,6 +38,7 @@ from pathlib import Path
 DEPLOY = Path(__file__).resolve().parent
 USER_DATA = Path("/freqtrade/user_data")
 SECRETS = DEPLOY / "secrets"
+BASE = json.loads((DEPLOY / "config.base.json").read_text(encoding="utf-8"))   # chiến lược, khung, cặp
 
 
 def rand(n: int = 24) -> str:
@@ -80,7 +81,7 @@ def write_hub(creds: dict) -> dict:
     h.setdefault("password", rand(12))
     h.setdefault("trust_tailscale", True)             # qua `tailscale serve`: Tailscale đã xác thực, khỏi mật khẩu
     h.setdefault("allowed_logins", [])
-    cfg.setdefault("strategy", "DonchianRevert")
+    cfg["strategy"] = BASE["strategy"]                # luôn theo chiến lược bot đang chạy (config.base.json)
     cfg.setdefault("app_dir", "/app")
     cfg.pop("exchange_file", None)                   # hub không đọc key sàn nữa; chế độ lấy từ .env
     cfg.setdefault("data", {"dir": str(USER_DATA / "hub_data"), "update_every_s": 120, "datasets": HUB_DATASETS})
@@ -156,8 +157,8 @@ def main() -> None:
 
     lab_dir = USER_DATA / "strategies_lab"
     lab_dir.mkdir(parents=True, exist_ok=True)
-    src = USER_DATA / "strategies" / "DonchianRevert.py"
-    dst = lab_dir / "DonchianRevert.py"
+    src = USER_DATA / "strategies" / f"{BASE['strategy']}.py"
+    dst = lab_dir / src.name
     if not dst.exists() or dst.read_bytes() != src.read_bytes():
         shutil.copy2(src, dst)
         print(f"Chép chiến lược sang {dst}")
@@ -168,7 +169,7 @@ def main() -> None:
             "freqtrade", "download-data", "--userdir", str(USER_DATA),
             "-c", str(DEPLOY / "config.base.json"), "-c", str(DEPLOY / "config.lab.json"),
             "-c", str(SECRETS / "lab.json"),
-            "--timerange", args.timerange, "--timeframes", "15m",
+            "--timerange", args.timerange, "--timeframes", BASE["timeframe"], "15m",   # 15m: --timeframe-detail
         ], check=True)
     print("\nXong. Tiếp theo: docker compose up -d")
 
@@ -314,7 +315,7 @@ def set_demo_from_env() -> None:
 
 
 def write_exchange(kind: str, key: str, secret: str, cap: float | None = None) -> None:
-    conf: dict = {"bot_name": f"DonchianRevert-{kind}",
+    conf: dict = {"bot_name": f"{BASE['strategy']}-{kind}",
                   "exchange": {"key": key, "secret": secret, "demo_trading": kind == "demo"}}
     if cap is not None:
         conf["available_capital"] = cap

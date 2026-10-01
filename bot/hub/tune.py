@@ -1,5 +1,5 @@
 """
-Chỉnh tham số DonchianRevert (trước là trang "tuner" riêng): backtest thử trên LAB, áp dụng cho LIVE.
+Chỉnh tham số chiến lược của bot (hub.json "strategy"; trước là trang "tuner" riêng): backtest thử trên LAB, áp dụng cho LIVE.
 
     LAB : freqtrade webserver — backtest với tham số đang thử (thư mục strategies_lab/)
     LIVE: freqtrade trade     — ghi tham số + reload_config (thư mục strategies/, luôn sao lưu bản cũ)
@@ -21,6 +21,13 @@ from pydantic import BaseModel
 
 # Nhãn tiếng Việt cho từng tham số. Tham số nào không có ở đây vẫn hiện, với tên gốc.
 LABELS: dict[str, tuple[str, str]] = {
+    # TrendBreakout
+    "entry_period": ("Kênh vào lệnh (số nến)", "Long khi đóng cửa trên đỉnh, Short khi dưới đáy của ngần này nến trước."),
+    "ema_filter": ("Lọc EMA200", "Chỉ Long khi giá trên EMA200, chỉ Short khi dưới."),
+    "exit_period": ("Kênh thoát lệnh (số nến)", "Thoát khi đóng cửa thủng đáy (Long) / vượt đỉnh (Short) của ngần này nến."),
+    "fixed_lev": ("Đòn bẩy cố định", "Bật: luôn dùng đòn bẩy tối đa để ký quỹ mỗi lệnh nhỏ (rủi ro/lệnh không đổi). "
+                                     "Nên bật khi chạy nhiều coin."),
+    # DonchianRevert
     "dc_period": ("Chu kỳ kênh Donchian", "Số nến 15m để tính đỉnh/đáy kênh."),
     "dc_long": ("Ngưỡng Long", "Vào Long khi vị trí giá trong kênh ≤ ngưỡng này (0 = đáy kênh)."),
     "dc_short": ("Ngưỡng Short", "Vào Short khi vị trí giá trong kênh ≥ ngưỡng này (1 = đỉnh kênh)."),
@@ -35,8 +42,8 @@ LABELS: dict[str, tuple[str, str]] = {
     "tp_r": ("Chốt lời cố định (R)", "Chốt lời khi lãi đạt ngần này R; 0 = tắt."),
     "risk_pct": ("Rủi ro mỗi lệnh (% vốn)", "Số % vốn mất nếu lệnh dính stoploss ban đầu."),
     "max_lev": ("Đòn bẩy tối đa", "Giới hạn đòn bẩy khi tính khối lượng theo rủi ro."),
-    "halt_on": ("Tự dừng khi thua nhiều", "Ngừng vào lệnh mới khi sụt vốn > 15% hoặc profit factor < 1 sau 60 lệnh. "
-                                          "Đã dừng thì tắt để chạy tiếp (sau khi xem lại)."),
+    "halt_on": ("Tự dừng khi thua nhiều", "Ngừng vào lệnh mới khi sụt vốn > 15% (DonchianRevert: thêm profit factor "
+                                          "< 1 sau 60 lệnh). Đã dừng thì tắt để chạy tiếp (sau khi xem lại)."),
 }
 SPACE_TITLES = {"buy": "Vào lệnh", "sell": "Thoát lệnh & rủi ro"}
 
