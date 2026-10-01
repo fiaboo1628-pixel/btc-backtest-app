@@ -12,17 +12,26 @@
 | Lọc bán tháo/mua đuổi | Volume / TB 96 nến | < 1.0 |
 | Rủi ro | ATR(14) | ATR ≥ 0.4% giá; 1R = 3×ATR |
 
-Thoát: SL −1R → khi lãi +2R bật trailing cách đỉnh/đáy 1R. Khối lượng: rủi ro 1% vốn/lệnh (tối đa x5).
+Thoát: SL −1R → khi lãi +2R bật trailing cách đỉnh/đáy 1R. Khối lượng: rủi ro 0.5% vốn/lệnh (tối đa x5).
 Tuỳ chọn: `tp_r` chốt lời cố định theo R, `trail_on` bật/tắt trailing.
+Tự dừng (`halt_on`, chỉ live/dry-run): ngừng vào lệnh mới khi sụt vốn > 15% hoặc profit factor < 1 sau 60 lệnh,
+ghi dòng ERROR để hub đẩy cảnh báo về điện thoại. Xem lại rồi tắt `halt_on` ở trang Chỉnh tham số để chạy tiếp.
 
-## Kết quả backtest (01/2021 → 09/2026, phí 0.035%/chiều, funding 0.01%/8h)
-Chạy với `--timeframe-detail 1m` (thoát lệnh tính trên từng nến 1m bên trong nến 15m — chỉ dùng nến 15m
-thì trailing sát bị thổi phồng hoặc đánh giá thấp):
-Tổng **+84.9%**, ~**11.3%/năm**, max drawdown **15.1%**, profit factor **1.24**, 426 lệnh, thắng 39%, 6/6 năm có lãi.
-Lãi theo năm (USDT, vốn 1000): 2021 +208 · 2022 +112 · 2023 +192 · 2024 +146 · 2025 +88 · 2026 +103.
-Dữ liệu Binance Futures thật (data.binance.vision, trailing 0.5R cũ): +53%, DD 12.9%, PF 1.22.
+## Kết quả backtest — Binance BTCUSDT perpetual (01/2020 → 08/2026)
+Freqtrade `--timeframe-detail 1m`, phí 0.05%/chiều, funding thật, rủi ro 1%/lệnh
+(chi tiết và các bài kiểm tra độ bền: [`research/robustness_2026-10.md`](research/robustness_2026-10.md)):
+Tổng **+63.1%**, ~**7.6%/năm**, max drawdown **12.9%**, profit factor **1.22**, 378 lệnh, thắng 42%, **2/7 năm lỗ**.
+Lãi theo năm (% vốn đầu năm): 2020 −1.8 · 2021 +29.2 · 2022 −3.4 · 2023 +8.7 · 2024 +4.2 · 2025 +17.6 · 2026 (8 tháng) −0.0.
+Phí 0.07% + trượt 0.02%: +36.6%, PF 1.14. Ở 0.5%/lệnh lãi và sụt vốn còn khoảng một nửa;
+Monte Carlo: max DD p95 13% (25% ở mức 1%).
 
-So sánh cách thoát (cùng dữ liệu, 1m detail): trailing 0.5R +56% · trailing 1R **+85%, DD 15%** ·
+**Walk-forward thất bại** (tối ưu trên 2 năm, chạy 6 tháng kế tiếp, 10 cửa sổ 2022 → 2026): lỗ −33% đến −77%.
+Tham số hiện tại được chọn sau khi xem dữ liệu, nên chưa chứng minh được lợi thế ngoài mẫu.
+
+Số cũ trên Bitstamp BTC/USD spot (+84.9%, DD 15.1%, 6/6 năm có lãi) **không mô tả** bot trên Binance:
+chỉ 108/322 lệnh trùng nến, lãi theo năm khác hẳn.
+
+So sánh cách thoát (dữ liệu Bitstamp cũ, 1m detail): trailing 0.5R +56% · trailing 1R **+85%, DD 15%** ·
 TP cố định 1:4 không trailing +55%, DD 22%, 2 năm lỗ · 1:5 +121% nhưng thắng 22%, chỉ 42% số tháng có lãi.
 (Mua & giữ BTC cùng kỳ: +197%.)
 
@@ -36,7 +45,7 @@ TP cố định 1:4 không trailing +55%, DD 22%, 2 năm lỗ · 1:5 +121% nhưn
 6. ML lọc tín hiệu (meta-labeling, `research/meta_label.py`) không hơn lọc ngẫu nhiên → giữ bộ lọc hiện tại.
 
 ## Hạn chế
-- Dữ liệu Bitstamp BTC/USD spot, không phải Binance perpetual; funding giả định cố định.
+- Lợi thế mỏng và tập trung ở 2021, 2025; bỏ hai năm đó thì gần hòa. ETH/SOL PF 1.09, BNB −53%: không mở rộng sang coin khác.
 - Donchian được chọn sau khi xem kết quả 2025–2026 → chưa có dữ liệu kiểm tra sạch.
 - Lợi thế mỏng. **Hãy dry-run 1–2 tháng trước khi dùng tiền thật. Không phải lời khuyên đầu tư.**
 

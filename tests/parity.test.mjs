@@ -18,7 +18,8 @@ test("khớp freqtrade từng lệnh (DonchianRevert, nến 1m detail)", () => {
   const strat = JSON.parse(readFileSync(new URL("../presets/donchian_revert.json", import.meta.url)));
   const k = resample(k1, "15m");
   const startIdx = k.t.findIndex((t) => t >= fx.start);
-  const account = { ...DEFAULT_ACCOUNT, ...strat.account, fee: fx.fee, wallet: fx.wallet };
+  // fixture tạo với risk_pct 1 (mặc định cũ của bot), không theo preset
+  const account = { ...DEFAULT_ACCOUNT, ...strat.account, riskPct: 1, fee: fx.fee, wallet: fx.wallet };
   const res = backtest(k, buildSignals(strat, k, k1), I.atr(k.h, k.l, k.c, 14),
     { exit: strat.exit, account, funding: fx.funding, startIdx, detail: k1, detailMs: 15 * 60e3 });
   assert.ok(fx.trades.length >= 10, "fixture có đủ lệnh");

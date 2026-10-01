@@ -93,7 +93,7 @@
     "maxHoldBars": 0
   },
   "account": {
-    "riskPct": 1,
+    "riskPct": 0.5,
     "maxLev": 5
   }
 }

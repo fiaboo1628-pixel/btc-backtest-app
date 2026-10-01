@@ -35,6 +35,8 @@ LABELS: dict[str, tuple[str, str]] = {
     "tp_r": ("Chốt lời cố định (R)", "Chốt lời khi lãi đạt ngần này R; 0 = tắt."),
     "risk_pct": ("Rủi ro mỗi lệnh (% vốn)", "Số % vốn mất nếu lệnh dính stoploss ban đầu."),
     "max_lev": ("Đòn bẩy tối đa", "Giới hạn đòn bẩy khi tính khối lượng theo rủi ro."),
+    "halt_on": ("Tự dừng khi thua nhiều", "Ngừng vào lệnh mới khi sụt vốn > 15% hoặc profit factor < 1 sau 60 lệnh. "
+                                          "Đã dừng thì tắt để chạy tiếp (sau khi xem lại)."),
 }
 SPACE_TITLES = {"buy": "Vào lệnh", "sell": "Thoát lệnh & rủi ro"}
 
