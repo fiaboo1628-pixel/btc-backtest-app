@@ -171,7 +171,7 @@ def test_live_summary(tmp_path, monkeypatch):
         "/daily": {"data": [{"date": "2026-09-27", "abs_profit": 5, "trade_count": 1}]},
         "/trades": {"trades": [{"trade_id": 1, "is_open": False, "close_timestamp": 1},
                                {"trade_id": 2, "is_open": False, "close_timestamp": 2}]},
-        "/logs": {"logs": [["d", 1, "x", "INFO", "hi"], ["d", 2, "x", "WARNING", "careful"]]},
+        "/logs": {"logs": [["d", 1000, "x", "INFO", "hi"], ["d", 2000, "x", "WARNING", "careful"]]},  # freqtrade: mili giây
         "/health": {"last_process_ts": 99},
     }
 
@@ -235,8 +235,9 @@ def test_watchdog_alerts_once_and_on_recovery():
     assert "không xử lý" in run()[0]
     r["/health"]["last_process_ts"] = now[0]
     run()
-    r["/logs"]["logs"] = [["d", now[0] + 1, "x", "ERROR", "Unable to place a stoploss order"],
-                          ["d", now[0] + 2, "x", "WARNING", "meh"]]
+    r["/logs"]["logs"] = [["d", 999_000, "x", "ERROR", "log cũ trước lúc hub khởi động"],      # freqtrade: mili giây
+                          ["d", (now[0] + 1) * 1000, "x", "ERROR", "Unable to place a stoploss order"],
+                          ["d", (now[0] + 2) * 1000, "x", "WARNING", "meh"]]
     assert run() == ["ERROR: Unable to place a stoploss order"]
     assert run() == []                                                      # log cũ không báo lại
     down[0] = True
@@ -244,6 +245,69 @@ def test_watchdog_alerts_once_and_on_recovery():
     assert "không trả lời" in run()[0]
     down[0] = False
     assert run()[0].startswith("✅")
+
+
+def test_watchdog_keeps_open_issues_while_bot_down():
+    """Bot im lặng không có nghĩa lệnh thiếu stop đã ổn: không được báo "Hết" cho nó."""
+    import alerts
+    r = {"/show_config": {"state": "running", "dry_run": False}, "/health": {}, "/logs": {"logs": []},
+         "/status": [{"trade_id": 7, "pair": "BTC/USDT:USDT", "orders": []}]}
+    down = [False]
+
+    class Fake:
+        async def call(self, method, path, **kw):
+            if down[0]:
+                raise RuntimeError("connection refused")
+            return r[path]
+
+    w = alerts.Watchdog(Fake(), None)
+    run = lambda: asyncio.run(w.check())  # noqa: E731
+    run()
+    assert "#7" in run()[0]
+    down[0] = True
+    run(), run()
+    msgs = run()
+    assert len(msgs) == 1 and "không trả lời" in msgs[0]                 # chỉ báo bot im, không "Hết" lệnh #7
+    assert run() == []
+    down[0] = False
+    msgs = run()                                                            # bot trả lời lại, lệnh #7 vẫn thiếu stop
+    assert len(msgs) == 1 and msgs[0].startswith("✅") and "không trả lời" in msgs[0]
+
+
+def test_watchdog_retries_unsent_alerts():
+    """Gửi hỏng (Telegram timeout/429) thì giữ tin, vòng sau gửi lại đúng thứ tự."""
+    import alerts
+    got, fail = [], [True]
+
+    async def send(msg):
+        if fail[0]:
+            raise RuntimeError("timeout")
+        got.append(msg)
+
+    w = alerts.Watchdog(None, send)
+    w.outbox = ["⚠️ a", "✅ Hết: a"]
+    asyncio.run(w.flush())
+    assert got == [] and len(w.outbox) == 2
+    fail[0] = False
+    asyncio.run(w.flush())
+    assert got == ["[bot] ⚠️ a", "[bot] ✅ Hết: a"] and w.outbox == []
+
+
+def test_hub_starts_with_half_configured_telegram(tmp_path):
+    """alerts có token mà thiếu chat_id: hub vẫn chạy, chỉ tắt Telegram."""
+    c = make_app(tmp_path, live={"api_url": "http://x", "username": "a", "password": "b"},
+                 alerts={"telegram_token": "t"})
+    assert c.get("/api/hub", headers=BASIC).json()["features"]["live"]
+
+
+def test_parse_cap_rejects_ambiguous_separators():
+    sys.path.insert(0, str(HERE.parent / "deploy"))
+    import setup
+    assert setup.parse_cap("300") == 300 and setup.parse_cap("300.5") == 300.5 and setup.parse_cap("1000") == 1000
+    assert setup.parse_cap("") is None
+    for bad in ("300,5", "1,000", "1.000", "10.000.000", "-5", "abc", "inf"):
+        with pytest.raises(SystemExit):
+            setup.parse_cap(bad)
 
 
 def test_validate_keeps_live_values_and_rejects_off_step():

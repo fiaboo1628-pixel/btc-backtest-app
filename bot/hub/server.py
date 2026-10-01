@@ -162,16 +162,28 @@ def create_app(cfg: dict) -> FastAPI:
         features["data"] = True
     if "live" in cfg:
         a = cfg.get("alerts") or {}
-        tg = alerts.telegram_sender(a["telegram_token"], a["chat_id"]) if a.get("telegram_token") else None
+        tg = None
+        if a.get("telegram_token") and a.get("chat_id"):
+            tg = alerts.telegram_sender(a["telegram_token"], a["chat_id"])
+        elif a.get("telegram_token") or a.get("chat_id"):
+            log.warning("hub.json alerts thiếu telegram_token hoặc chat_id: tắt Telegram")
         data_dir = Path(cfg["data"].get("dir", HERE / "data")) if "data" in cfg else HERE / "data"
         pusher = push.Push(Path(cfg.get("push_file", data_dir / "push.json")))
         app.include_router(pusher.router())
 
         async def send(msg: str) -> None:
+            """Thành công khi ít nhất một kênh nhận; không kênh nào nhận thì báo lỗi để watchdog gửi lại sau."""
+            sent = False
             if tg:
-                await tg(msg)
+                try:
+                    await tg(msg)
+                    sent = True
+                except Exception as e:  # noqa: BLE001
+                    log.warning("Telegram lỗi: %s", type(e).__name__)   # không log chi tiết: URL có token
             if pusher.subs:
-                await pusher.send("Bot alert", msg)
+                sent = await pusher.send("Bot alert", msg) > 0 or sent
+            if (tg or pusher.subs) and not sent:
+                raise RuntimeError("không kênh nào nhận cảnh báo")
 
         has_channel = lambda: bool(tg or pusher.subs)  # noqa: E731
         app.include_router(live.router(cfg, has_channel))

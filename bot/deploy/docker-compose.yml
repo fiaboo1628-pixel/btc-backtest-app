@@ -36,7 +36,8 @@ services:
       - "./:/deploy:ro"
       - {type: tmpfs, target: /deploy/secrets, tmpfs: {mode: 0o755}}
       - "/dev/null:/deploy/hub.json:ro"
-      - "./secrets/paper.json:/deploy/secrets/paper.json:ro"
+      - {type: bind, source: ./secrets/paper.json, target: /deploy/secrets/paper.json, read_only: true,
+         bind: {create_host_path: false}}   # thiếu file thì báo lỗi (chạy setup trước), không tạo thư mục root
     command: >
       trade
       --logfile /freqtrade/user_data/logs/paper.log
@@ -53,7 +54,8 @@ services:
       - "./:/deploy:ro"
       - {type: tmpfs, target: /deploy/secrets, tmpfs: {mode: 0o755}}
       - "/dev/null:/deploy/hub.json:ro"
-      - "./secrets/lab.json:/deploy/secrets/lab.json:ro"
+      - {type: bind, source: ./secrets/lab.json, target: /deploy/secrets/lab.json, read_only: true,
+         bind: {create_host_path: false}}   # thiếu file thì báo lỗi (chạy setup trước), không tạo thư mục root
     command: >
       webserver
       --logfile /freqtrade/user_data/logs/lab.log
