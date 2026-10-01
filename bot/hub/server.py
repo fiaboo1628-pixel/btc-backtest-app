@@ -35,6 +35,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import alerts  # noqa: E402
+import weekly  # noqa: E402
 import candles  # noqa: E402
 import live  # noqa: E402
 import push  # noqa: E402
@@ -128,7 +129,7 @@ def create_app(cfg: dict) -> FastAPI:
     h = cfg.get("hub", {})
     app_dir = Path(cfg.get("app_dir", HERE.parent.parent)).resolve()
     features = {"data": False, "live": False, "tune": False}
-    store = watchdog = None
+    store = watchdog = report = None
     proxies = tailscale_proxies(h)
     if h.get("trust_tailscale", True) and not h.get("allowed_logins"):
         log.warning("allowed_logins trống: mọi tài khoản Tailscale thấy được máy này đều vào được hub")
@@ -138,6 +139,8 @@ def create_app(cfg: dict) -> FastAPI:
         tasks = [asyncio.create_task(store.run())] if store and store.sets else []
         if watchdog:
             tasks.append(asyncio.create_task(watchdog.run()))
+        if report:
+            tasks.append(asyncio.create_task(report()))
         yield
         for task in tasks:
             task.cancel()
@@ -189,6 +192,13 @@ def create_app(cfg: dict) -> FastAPI:
         app.include_router(live.router(cfg, has_channel))
         features["live"] = True
         watchdog = alerts.Watchdog(tune.FtClient(cfg["live"]), send, has_channel)
+        ft_live = tune.FtClient(cfg["live"])
+        ft_paper = tune.FtClient(cfg["paper"]) if "paper" in cfg else None
+        report = lambda: weekly.run(ft_live, ft_paper, send)  # noqa: E731
+
+        @app.get("/api/weekly")
+        async def weekly_report():
+            return await weekly.build(ft_live, ft_paper)
     if "lab" in cfg and "live" in cfg:
         try:
             app.include_router(tune.router(cfg))
