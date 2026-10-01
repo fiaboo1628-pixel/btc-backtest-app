@@ -80,8 +80,9 @@ Repo này gom toàn bộ dự án. Trước đây bot nằm ở repo `bot_trade`
 
 ### Kết luận nghiên cứu
 - **Chỉ DonchianRevert trên BTC 15m có lợi thế.** Nhiều coin, vàng, scalp khung nhỏ, các chỉ báo khác: đều thua.
-- Thiết lập khuyên dùng: **stop 3 ATR, trailing từ +2R, cách đỉnh 1.0R, rủi ro 1%/lệnh** (tối đa x5).
-  Backtest 01/2021 → 09/2026 với nến 1m: +85%, DD 15%, PF 1.24, 6/6 năm có lãi. TP cố định 1:4 không trailing kém hơn.
+- Thiết lập khuyên dùng: **stop 3 ATR, trailing từ +2R, cách đỉnh 1.0R, rủi ro 0.5%/lệnh** (tối đa x5).
+  Binance BTCUSDT perpetual 01/2020 → 08/2026, nến 1m, rủi ro 1%: +63%, ~7.6%/năm, DD 12.9%, PF 1.22, 2/7 năm lỗ.
+  Walk-forward thất bại (`bot/research/robustness_2026-10.md`): chưa nên chạy tiền thật ở mức vốn có ý nghĩa.
 - **ML lọc lệnh (meta-labeling) không giúp** (`bot/research/meta_label.py`, walk-forward ngoài mẫu 2022 → 2026):
   gốc +55% DD 14.6%; LightGBM giữ 70% +47% DD 12.4%, không hơn lọc ngẫu nhiên có ý nghĩa.
   Nới điều kiện vào lệnh để có nhiều lệnh hơn: −53%, ML lọc lại chỉ về +4%. → giữ nguyên bộ lọc hiện tại.

@@ -9,16 +9,20 @@ Tín hiệu (xét khi nến 15m đóng cửa):
 Quản lý lệnh:
   - 1R = 3 x ATR(14) của nến tín hiệu. SL ban đầu = -1R.
   - Khi lãi chạm +2R: trailing, cách đỉnh (đáy với Short) 1R.
-  - Khối lượng: rủi ro 1% vốn mỗi lệnh (đòn bẩy tự tính, tối đa x5).
+  - Khối lượng: rủi ro 0.5% vốn mỗi lệnh (đòn bẩy tự tính, tối đa x5).
   - Tuỳ chọn: tp_r > 0 chốt lời cố định ở tp_r × R; trail_on = False tắt trailing.
-Backtest (01/2021 → 09/2026, Bitstamp BTC/USD, --timeframe-detail 1m, phí 0.035%/chiều, funding 0.01%/8h):
-  +84.9% tổng, ~11.3%/năm, max drawdown 15.1%, profit factor 1.24, 6/6 năm có lãi.
+  - Live/dry-run: ngừng vào lệnh mới khi sụt vốn > 15% hoặc profit factor < 1 sau 60 lệnh (halt_on).
+Backtest (01/2020 → 08/2026, Binance BTCUSDT perpetual, --timeframe-detail 1m, phí 0.05%/chiều, funding thật,
+rủi ro 1%): +63.1% tổng, ~7.6%/năm, max drawdown 12.9%, profit factor 1.22, 2/7 năm lỗ.
+Walk-forward thất bại: chưa chứng minh được lợi thế ngoài dữ liệu đã dùng để chọn tham số
+(bot/research/robustness_2026-10.md).
 
 Mọi ngưỡng ở trên là tham số: giá trị mặc định nằm trong code, và có thể ghi đè bằng file
 DonchianRevert.json đặt cạnh file này (trang "Chỉnh tham số" của hub — bot/hub/tune.py — ghi file đó).
 
 KHÔNG phải lời khuyên đầu tư. Hãy chạy dry-run trước khi dùng tiền thật.
 """
+import logging
 import math
 from datetime import datetime
 
@@ -34,6 +38,30 @@ from freqtrade.strategy import (
     stoploss_from_absolute,
     timeframe_to_prev_date,
 )
+
+log = logging.getLogger(__name__)
+
+# Ngưỡng dừng theo bot/research/robustness_2026-10.md
+HALT_DD = 0.15          # sụt vốn (đã chốt) từ đỉnh
+HALT_MIN_TRADES = 60    # PF chỉ xét khi đủ số lệnh, ít hơn thì nhiễu
+
+
+def halt_reason(start: float, profits: list[float]) -> str | None:
+    """Lý do dừng vào lệnh mới, None nếu chưa chạm ngưỡng. profits: lãi/lỗ USDT từng lệnh đã đóng, theo thứ tự đóng.
+    DD tính trên cả lịch sử, nên đã chạm thì dừng hẳn tới khi người dùng tắt halt_on."""
+    eq = peak = start
+    dd = 0.0
+    for p in profits:
+        eq += p
+        peak = max(peak, eq)
+        dd = max(dd, 1 - eq / peak)
+    if dd > HALT_DD:
+        return f"sụt vốn {dd:.1%} > {HALT_DD:.0%}"
+    win = sum(p for p in profits if p > 0)
+    loss = -sum(p for p in profits if p < 0)
+    if len(profits) >= HALT_MIN_TRADES and win < loss:
+        return f"profit factor {win / loss:.2f} < 1 sau {len(profits)} lệnh"
+    return None
 
 
 class DonchianRevert(IStrategy):
@@ -65,11 +93,15 @@ class DonchianRevert(IStrategy):
     trail_dist_r = DecimalParameter(0.1, 2.0, default=1.0, decimals=1, space="sell", optimize=False)
     trail_on = BooleanParameter(default=True, space="sell", optimize=False)
     tp_r = DecimalParameter(0.0, 10.0, default=0.0, decimals=1, space="sell", optimize=False)
-    risk_pct = DecimalParameter(0.1, 3.0, default=1.0, decimals=2, space="sell", optimize=False)
+    # 0.5% theo bot/research/robustness_2026-10.md: Monte Carlo max DD p95 13% (so với 25% ở 1%)
+    risk_pct = DecimalParameter(0.1, 3.0, default=0.5, decimals=2, space="sell", optimize=False)
     max_lev = IntParameter(1, 10, default=5, space="sell", optimize=False)
     # Bật khi chạy nhiều coin cùng lúc: luôn dùng max_lev để ký quỹ mỗi lệnh nhỏ (rủi ro/lệnh không đổi,
     # vì khối lượng vẫn tính theo 1R). Tắt = đòn bẩy tối thiểu cần thiết (mặc định, 1 coin).
     fixed_lev = BooleanParameter(default=False, space="sell", optimize=False)
+    # Tự dừng vào lệnh mới (chỉ live/dry-run, backtest không đổi) khi chạm ngưỡng của halt_reason().
+    # Lệnh đang mở vẫn được quản lý bình thường. Muốn chạy tiếp sau khi xem lại: tắt ở trang Chỉnh tham số.
+    halt_on = BooleanParameter(default=True, space="sell", optimize=False)
 
     def __init__(self, config: dict) -> None:
         super().__init__(config)
@@ -129,6 +161,19 @@ class DonchianRevert(IStrategy):
         risk = self._signal_atr(pair, current_time) * self.r_atr.value
         self._pending_risk[pair] = risk              # order_filled lưu lại vào lệnh
         return float(min(equity * self.risk_pct.value / 100 / (risk / current_rate) / leverage, max_stake))
+
+    def confirm_trade_entry(self, pair, order_type, amount, rate, time_in_force, current_time,
+                            entry_tag, side, **kwargs) -> bool:
+        if not self.halt_on.value or self.dp.runmode.value not in ("live", "dry_run"):
+            return True
+        closed = sorted(Trade.get_trades_proxy(is_open=False), key=lambda t: t.close_date_utc)
+        why = halt_reason(self.wallets.get_starting_balance(), [t.close_profit_abs or 0.0 for t in closed])
+        if why:
+            # ERROR: watchdog của hub (alerts.py) đẩy dòng này về điện thoại
+            log.error("DỪNG VÀO LỆNH MỚI: %s — bỏ tín hiệu %s %s. Xem lại rồi tắt halt_on để chạy tiếp.",
+                      why, pair, side)
+            return False
+        return True
 
     def order_filled(self, pair: str, trade: Trade, order, current_time: datetime, **kwargs) -> None:
         """Lưu 1R vào lệnh ngay khi lệnh vào khớp. Nếu không, custom_stoploss phải tính lại từ nến đang

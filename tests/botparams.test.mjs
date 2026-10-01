@@ -13,7 +13,7 @@ const clone = (x) => JSON.parse(JSON.stringify(x));
 const BOT_DEFAULTS = {
   dc_period: 20, dc_long: 0.074, dc_short: 0.944, adx_min: 30, vol_max: 1.0, atr_min_pct: 0.4,
   short_enabled: true, r_atr: 3, trail_on: true, trail_start_r: 2, trail_dist_r: 1.0, tp_r: 0,
-  risk_pct: 1, max_lev: 5,
+  risk_pct: 0.5, max_lev: 5,
 };
 
 test("preset DonchianRevert khớp đúng tham số mặc định của bot", () => {
@@ -33,11 +33,11 @@ test("mặc định trong DonchianRevert.py đúng như bảng trên", () => {
 test("chỉnh ngưỡng, tắt Short, tắt trailing", () => {
   const s = full(preset("donchian_revert.json"));
   s.long[0].value = 0.05; s.long[1].value = 25; s.long[1 + 0].params.n = 14;
-  s.short = []; s.exit.trailStartR = 0; s.account.riskPct = 0.5;
+  s.short = []; s.exit.trailStartR = 0; s.account.riskPct = 0.75;
   const p = toBotParams(s).params;
   assert.equal(p.dc_long, 0.05); assert.equal(p.adx_min, 25); assert.equal(p.short_enabled, false);
   assert.equal(p.trail_on, false); assert.equal("trail_start_r" in p, false); assert.equal("trail_dist_r" in p, false); assert.equal("dc_short" in p, false);
-  assert.equal(p.risk_pct, 0.5);
+  assert.equal(p.risk_pct, 0.75);
 });
 
 test("không khớp khuôn thì báo lý do", () => {
