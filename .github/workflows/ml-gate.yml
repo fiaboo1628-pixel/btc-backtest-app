@@ -1,0 +1,43 @@
+# ML làm bộ lọc cho DonchianRevert (research/ml_gate.py): học từ OI / long-short / taker / funding thật của Binance,
+# đánh giá walk-forward. Kết quả: tab Summary của lần chạy + artifact ml-gate.
+name: ml-gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      pair:
+        description: "Coin"
+        default: "BTC"
+  push:
+    branches: ["claude/**", "research/**"]
+    paths: ["bot/research/ml_gate.py", ".github/workflows/ml-gate.yml"]
+
+jobs:
+  ml-gate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bot
+    timeout-minutes: 120
+    env:
+      PAIR: ${{ inputs.pair || 'BTC' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: .github/workflows/ml-gate.yml
+      - name: Cài freqtrade + numba + scikit-learn
+        run: pip install -q freqtrade==2026.8 numba scikit-learn
+      - name: Tải nến 1m + 15m, mark, funding, metrics (data.binance.vision)
+        run: |
+          END=$(date -u -d "$(date -u +%Y-%m-01) -1 month" +%Y-%m)
+          python research/binance_vision.py --pairs $PAIR --tf 1m 15m --metrics --start 2020-01 --end $END --out data/binance
+      - name: ML gate walk-forward
+        run: python research/ml_gate.py --datadir data/binance --pair $PAIR --out ml_gate_out
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ml-gate
+          path: bot/ml_gate_out/
