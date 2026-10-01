@@ -24,8 +24,8 @@ Cùng bộ kiểm tra như `robustness_2026-10.md` (DonchianRevert), để so s�
    thắng walk-forward ở 8/10 đoạn) chứ không phải mặc định hiện tại.
 4. **Điểm yếu lớn nhất: lãi đến theo cụm năm và phía Short không đóng góp.** 2021 + 2023 + 2024 chiếm gần hết lãi; 2025 lỗ cả
    năm; funding ăn −1 933 USDT (≈16% lãi gộp). Short lỗ −518 USDT trên 1 867 lệnh, Long +11 856 trên 2 047 — toàn bộ lợi thế nằm
-   ở Long (đây là nhận xét sau khi xem kết quả, chưa được kiểm tra ngoài mẫu, không nên đổi tham số ngay). Nghiên cứu cũ còn
-   ghi freqtrade lookahead-analysis báo 1/40 tín hiệu có dấu hiệu nhìn trước — cần làm rõ trước khi chạy thật.
+   ở Long (đây là nhận xét sau khi xem kết quả, chưa được kiểm tra ngoài mẫu, không nên đổi tham số ngay). Cảnh báo
+   look-ahead 1/40 của nghiên cứu cũ là báo nhầm (đã làm rõ 10/2026, xem mục "Việc cần làm" bước 1).
 5. **Ghép với DonchianRevert không có ý nghĩa ở quy mô này:** Revert BTC +31% so với Trend +1134% cùng kỳ; tương quan tháng −0.12,
    Trend bù được 18/28 tháng Revert lỗ, Revert không bù được tháng nào Trend lỗ (0/33). Nếu chạy cả hai, Revert chỉ là nhiễu.
    Thứ tự ưu tiên nên đảo lại: TrendBreakout (rủi ro thấp) là ứng viên chính, DonchianRevert là phụ hoặc bỏ.
@@ -216,9 +216,12 @@ tăng rủi ro của nó lên ~10 lần, điều mà báo cáo robustness_2026-1
 
 ## Việc cần làm trước khi cân nhắc chạy thật
 
-1. Làm rõ cảnh báo look-ahead của nghiên cứu cũ (freqtrade lookahead-analysis báo 1/40 tín hiệu lệch, 2023–2024): chạy lại
-   `research/trend.py --checks-only` với số mẫu lớn hơn, tìm nguyên nhân (nhiều khả năng là `shift(1).rolling()` an toàn và
-   lệch nằm ở cách lookahead-analysis cắt dữ liệu, nhưng phải chứng minh).
+1. ~~Làm rõ cảnh báo look-ahead~~ — **xong, báo nhầm.** Lệnh bị báo (SOL 08/01/2023) không phải do nhìn trước:
+   lookahead-analysis đặt ví 1 tỷ USDT, và khi chạy qua `run_futures.py` (market giả, không giới hạn quy mô vị thế) với đòn
+   bẩy tự tính (ra x1 khi 1R lớn), BTC + ETH ngày 02/01 ăn hết ~99% ví nên lần chạy đủ 3 cặp bỏ lệnh SOL 02/01 rồi vào 08/01;
+   lần chạy cắt chỉ có SOL thì đủ tiền, vào từ 02/01 và còn giữ lệnh lúc 08/01 → "lệch". Kiểm chứng: cùng dữ liệu, freqtrade với
+   market thật của Binance 0/40 và 0/300 tín hiệu (07/2022–12/2024); `run_futures.py` + `fixed_lev` (cấu hình nghiên cứu dùng)
+   0/40. Dữ liệu data.binance.vision và API Binance trùng 100% quanh lệnh đó. `trend.py --checks-only` giờ chạy với `fixed_lev`.
 2. Chạy dry-run cấu hình 20/10 + EMA200, rủi ro 0.25%/lệnh, ≥ 3 tháng, so lệnh thật với backtest cùng kỳ (hub đã có báo cáo tuần).
 3. Kiểm tra lại Short riêng theo walk-forward (hiện Short lỗ toàn kỳ) — nếu Short cũng không có lợi thế ngoài mẫu thì cân nhắc
    `short_enabled = False`, nhưng chỉ sau khi kiểm tra, không phải vì bảng trên.
