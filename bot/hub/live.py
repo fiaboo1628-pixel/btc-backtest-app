@@ -13,16 +13,18 @@ from fastapi import APIRouter
 from tune import FtClient
 
 
+def has_stop(t: dict) -> bool:
+    """Lệnh có stop nằm trên sàn không (tab Live và watchdog dùng chung một cách đánh giá)."""
+    return bool(t.get("stoploss_order_id")) or any(
+        o.get("ft_order_side") == "stoploss" and o.get("status") in ("open", "new") for o in t.get("orders") or [])
+
+
 def trade_view(t: dict) -> dict:
     keep = ("trade_id", "pair", "is_short", "leverage", "amount", "stake_amount", "open_rate", "close_rate",
             "current_rate", "open_timestamp", "close_timestamp", "stop_loss_abs", "initial_stop_loss_abs",
-            "profit_abs", "profit_pct", "profit_ratio", "exit_reason", "enter_tag", "is_open",
-            "stoploss_order_id", "orders")
+            "profit_abs", "profit_pct", "profit_ratio", "exit_reason", "enter_tag", "is_open")
     out = {k: t.get(k) for k in keep if k in t}
-    # chỉ giữ việc lệnh stop có nằm trên sàn không, bỏ chi tiết từng order
-    orders = out.pop("orders", None) or []
-    out["stop_on_exchange"] = bool(out.pop("stoploss_order_id", None)) or any(
-        o.get("ft_order_side") == "stoploss" and o.get("status") in ("open", "new") for o in orders)
+    out["stop_on_exchange"] = has_stop(t)          # chỉ giữ việc stop có trên sàn không, bỏ chi tiết từng order
     return out
 
 
@@ -84,7 +86,7 @@ def router(cfg: dict, has_alerts=lambda: False) -> APIRouter:
         bal, prof, health = ok("balance") or {}, ok("profit") or {}, ok("health") or {}
         closed = [t for t in (ok("trades") or {}).get("trades", []) if not t.get("is_open")]
         closed.sort(key=lambda t: t.get("close_timestamp") or 0, reverse=True)
-        logs = [{"t": row[1], "level": row[3], "msg": row[4][:300]}
+        logs = [{"t": row[1] / 1000, "level": row[3], "msg": row[4][:300]}
                 for row in (ok("logs") or {}).get("logs", []) if row[3] in ("WARNING", "ERROR", "CRITICAL")]
         mode, mode_warning = mode_of(conf, mode_file)
         return {

@@ -28,6 +28,7 @@ import getpass
 import json
 import math
 import os
+import re
 import secrets
 import shutil
 import sqlite3
@@ -250,6 +251,8 @@ def set_api(alerts_on: bool) -> None:
         raise SystemExit("Thiếu key/secret, không đổi gì.")
     if kind == "real":
         cap = parse_cap(input("Vốn tối đa bot được dùng, USDT (bắt buộc với tiền thật): "), required=True)
+        if input(f"Vốn tối đa = {cap:,.2f} USDT. Đúng? [y/N] ").strip().lower() != "y":
+            raise SystemExit("Huỷ, không đổi gì.")
         check_real_key(key, secret, cap)
     else:
         cap = parse_cap(input("Vốn tối đa bot được dùng, USDT (Enter = toàn bộ số dư futures): "))
@@ -257,8 +260,12 @@ def set_api(alerts_on: bool) -> None:
 
 
 def parse_cap(text: str, required: bool = False) -> float | None:
-    """Vốn tối đa: số dương hữu hạn. Enter = toàn bộ số dư (chỉ cho Demo)."""
-    text = text.strip().replace(",", "")
+    """Vốn tối đa: số dương hữu hạn, dấu chấm là thập phân. Enter = toàn bộ số dư (chỉ cho Demo).
+    Dấu phẩy và kiểu "1.000" bị từ chối thay vì đoán: "300,5" (kiểu Việt) không được thành 3005 USDT."""
+    text = text.strip().replace(" ", "")
+    if "," in text or re.fullmatch(r"\d{1,3}(\.\d{3})+", text):
+        raise SystemExit(f"Vốn {text!r}: chỉ gõ số, dấu chấm cho phần lẻ, không dấu phân cách hàng nghìn "
+                         "(vd 300 hoặc 300.5); không đổi gì.")
     if not text:
         if required:
             raise SystemExit("Tiền thật phải đặt vốn tối đa, không đổi gì.")
