@@ -1,0 +1,46 @@
+# Kiểm tra độ bền TrendBreakout (research/robustness_trend.py) trên dữ liệu Binance USDT-M perpetual thật:
+# baseline, walk-forward, độ nhạy, chi phí, từng coin, Monte Carlo, ghép với DonchianRevert. Không sửa chiến lược.
+name: robustness-trend
+
+on:
+  workflow_dispatch:
+    inputs:
+      coins:
+        description: "Coin (BTC phải đứng đầu)"
+        default: "BTC ETH SOL BNB XRP DOGE ADA LINK AVAX LTC"
+  push:
+    branches: ["claude/**", "research/**"]
+    paths: ["bot/research/robustness_trend.py", "bot/research/fastsim_trend.py", ".github/workflows/robustness-trend.yml"]
+
+jobs:
+  robustness-trend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bot
+    timeout-minutes: 300
+    env:
+      COINS: ${{ inputs.coins || 'BTC ETH SOL BNB XRP DOGE ADA LINK AVAX LTC' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: .github/workflows/robustness-trend.yml
+      - name: Cài freqtrade (cùng bản bot đang chạy) + numba
+        run: pip install -q freqtrade==2026.8 numba
+      - name: Tải nến 15m + 4h, mark, funding cho các coin; nến 1m BTC cho DonchianRevert
+        run: |
+          END=$(date -u -d "$(date -u +%Y-%m-01) -1 month" +%Y-%m)
+          python research/binance_vision.py --pairs $COINS --tf 15m 4h --start 2020-01 --end $END --out data/binance
+          python research/binance_vision.py --pairs BTC --tf 1m --start 2020-01 --end $END --out data/binance
+      - name: Kiểm tra độ bền
+        run: python research/robustness_trend.py --datadir data/binance --coins $COINS --out robustness_trend_out --ft-workers 2
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: robustness-trend
+          path: |
+            bot/robustness_trend_out/result.md
+            bot/robustness_trend_out/result.json
