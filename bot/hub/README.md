@@ -13,6 +13,7 @@ Hub phục vụ **app điều khiển bot** (thư mục gốc repo: `index.html`
 | `/api/tune/schema` | Tham số chiến lược đọc từ class (tên, nhãn tiếng Việt, min/max/bước, mặc định) + giá trị LAB và LIVE | `tune.py` |
 | `/api/tune/backtest` | POST chạy backtest ở LAB (freqtrade webserver, nến chi tiết 15m, từ chối nếu một coin thiếu 15m); GET tiến độ / kết quả | `tune.py` |
 | `/api/tune/history` | 20 lần thử gần nhất (trong bộ nhớ hub) | `tune.py` |
+| `/api/tune/trades` | Từng lệnh của lần backtest xong gần nhất (cùng trường với lệnh của bot, mới nhất trước) | `tune.py` |
 | `/api/tune/apply` | Ghi tham số cho bot LIVE (sao lưu bản cũ vào `param_backups/`) + `reload_config` | `tune.py` |
 | `/api/tune/live` | Bot đang chạy: tài khoản, coin, khung, nến LAB có từ ngày nào tới ngày nào, trạng thái tự cập nhật nến | `tune.py`, `labdata.py` |
 | `/api/alerts` | Kênh cảnh báo đang có, sự cố đang báo, cảnh báo gần đây (ghi ở `alerts.json` cạnh `push.json`) | `alerts.py` |

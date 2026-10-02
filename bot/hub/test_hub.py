@@ -420,6 +420,20 @@ def test_summarize_per_pair():
     assert tune.summarize(_bt_result(results_per_pair=[]), "TrendBreakout")["pairs"] == []
 
 
+def test_bt_trades_newest_first_same_fields_as_bot():
+    tr = [{"pair": "SOL/USDT:USDT", "is_short": False, "leverage": 5.0, "open_timestamp": 1000, "close_timestamp": 5000,
+           "open_rate": 10, "close_rate": 12, "profit_abs": 4.2, "profit_ratio": 0.1, "exit_reason": "exit_signal", "fee_open": 0.0004},
+          {"pair": "BTC/USDT:USDT", "is_short": True, "leverage": 5.0, "open_date": "2025-01-02 00:00:00+00:00",
+           "close_date": "2025-01-03 04:00:00+00:00", "open_rate": 100, "close_rate": 103, "profit_abs": -5, "profit_ratio": -0.15,
+           "exit_reason": "stop_loss"}]
+    out = tune.bt_trades(_bt_result(trades=tr), "TrendBreakout")
+    assert [t["pair"] for t in out] == ["BTC/USDT:USDT", "SOL/USDT:USDT"]                 # đóng sau đứng trước
+    assert out[0]["close_timestamp"] == 1735876800000 and out[0]["is_short"] is True      # không có *_timestamp: đọc *_date
+    assert set(out[1]) == {"pair", "is_short", "leverage", "open_timestamp", "close_timestamp", "open_rate", "close_rate",
+                           "profit_abs", "profit_ratio", "exit_reason"}                    # bỏ trường thừa (phí…)
+    assert tune.bt_trades(_bt_result(), "TrendBreakout") == []
+
+
 def _ranges(monkeypatch, have):
     """Giả nến LAB: have = {(cặp, khung): (từ, tới)}; không có trong have = chưa có file."""
     def fake(data_dir, pairs, tfs):
@@ -490,6 +504,19 @@ def test_backtest_error_shown_not_swallowed(tmp_path, monkeypatch):
         "status": "error", "running": False, "status_msg": "Backtest failed with No data found. Terminating."}}, calls)
     j = c.get("/api/tune/backtest", headers=TS).json()
     assert j["status"] == "error" and "No data found" in j["message"] and "LAB không có nến" in j["message"]
+
+
+def test_backtest_trades_kept_for_last_run_only(tmp_path, monkeypatch):
+    tr = [{"pair": "SOL/USDT:USDT", "is_short": False, "open_timestamp": 1, "close_timestamp": 2, "profit_abs": 1}]
+    resp = {("GET", "/show_config"): {"timeframe": "15m"},
+            ("GET", "/backtest"): {"status": "ended", "running": False, "backtest_result": _bt_result(trades=tr)}}
+    c, _ = _tune_app(tmp_path, monkeypatch, resp, [])
+    assert c.get("/api/tune/trades", headers=TS).json() == {"at": None, "trades": []}         # chưa chạy lần nào
+    assert c.post("/api/tune/backtest", json={"params": {}, "timerange": "20210101-"}, headers=TS).status_code == 200
+    j = c.get("/api/tune/backtest", headers=TS).json()
+    assert "trades" not in j["last"]                                       # lúc chờ không kéo theo cả nghìn lệnh
+    t = c.get("/api/tune/trades", headers=TS).json()
+    assert t["at"] == j["last"]["at"] and [x["pair"] for x in t["trades"]] == ["SOL/USDT:USDT"]
 
 
 def test_labdata_command_and_temp_config(tmp_path):

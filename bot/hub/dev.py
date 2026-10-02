@@ -208,7 +208,9 @@ class FakeBots:
             "profit_total": (bal - wallet) / wallet, "profit_total_abs": round(bal - wallet, 2), "max_drawdown_account": dd,
             "winrate": 0.32, "profit_factor": round(rnd.uniform(1.0, 1.7), 2), "cagr": ((bal / wallet) ** (365 / max(1, len(daily))) - 1),
             "market_change": rnd.uniform(-0.2, 1.5), "periodic_breakdown": {"year": list(years.values())},
-            "results_per_pair": pairs, "stake_currency": "USDT"}}}
+            "results_per_pair": pairs, "stake_currency": "USDT",
+            "trades": [x for x in make_trades(total, int(time.mktime((y0, 1, 1, 0, 0, 0, 0, 0, 0)) * 1000), seed=3)
+                       if x["close_timestamp"] < end * 1000]}}}
 
 
 def fake_ranges(data_dir, pairs, tfs):

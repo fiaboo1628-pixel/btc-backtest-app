@@ -33,7 +33,9 @@ test("giá coin chọn số lẻ theo độ lớn", () => {
 
 test("ngày giờ, trước đây, độ dài", () => {
   const t = new Date(2026, 9, 2, 14, 5).getTime();
-  assert.equal(f.dateTime(t), "02/10 14:05");
+  const now = new Date(2026, 11, 31);
+  assert.equal(f.dateTime(t, now), "02/10 14:05");
+  assert.equal(f.dateTime(new Date(2024, 3, 26, 8, 0).getTime(), now), "26/04/2024 08:00");   // khác năm: thêm năm
   assert.equal(f.dateOnly(t), "02/10/2026");
   assert.equal(f.dateTime(null), "–");
   assert.equal(f.isoDay("2026-10-02 20:00"), "02/10/2026");

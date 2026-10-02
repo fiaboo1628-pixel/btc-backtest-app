@@ -51,11 +51,12 @@ export function price(n) {
 const pad = (x) => String(x).padStart(2, "0");
 
 /** ms (hoặc Date) → "02/10 14:05" theo giờ máy người xem. */
-export function dateTime(ms) {
+export function dateTime(ms, now = new Date()) {
   if (ms == null) return "–";
   const d = new Date(ms);
   if (Number.isNaN(d.getTime())) return "–";
-  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const y = d.getFullYear() === now.getFullYear() ? "" : `/${d.getFullYear()}`;   // lệnh backtest các năm trước
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}${y} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 /** ms → "02/10/2026". */

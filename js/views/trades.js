@@ -5,6 +5,13 @@ import { card, empty, errorBox, esc, kpi, loading } from "../ui.js";
 
 export const title = "Trades";
 
+/** Một lệnh đã đóng (trường như /api/trades của bot; màn Backtest dùng chung). */
+export const tradeRow = (t) => `<div class="tr">
+      <span class="side ${t.is_short ? "short" : "long"}">${side(t.is_short)}</span>
+      <span class="tmain"><b>${esc(coin(t.pair))} <span class="num">${price(t.open_rate)} → ${price(t.close_rate)}</span></b>
+        <small>${esc(dateTime(t.close_timestamp))} · ${esc(exitReason(t.exit_reason))} · ${esc(duration((t.close_timestamp || 0) - (t.open_timestamp || 0)))} · ${fmt(t.leverage, 0)}x</small></span>
+      <span class="tpnl ${cls(t.profit_abs)}">${signedMoney(t.profit_abs, "", 2).trim()}<small>${signedPct((t.profit_ratio ?? 0) * 100)}</small></span></div>`;
+
 let root = null, ctx = null, data = null, filter = "all", loadingNow = false;
 
 export function mount(el, c) {
@@ -51,6 +58,7 @@ function paint() {
   const pm = perMonth(all.length, data.since);
   const ex = data.expect || {};
   const pfText = pf == null ? "–" : pf === Infinity ? "∞" : fmt(pf, 2);
+  const halt = ctx.store.live?.halt?.threshold_pct;
   const enough = all.length >= (data.min_trades || 30);
 
   const compare = `<div class="tablewrap"><table class="wrap">
@@ -59,16 +67,12 @@ function paint() {
       <tr><td>Trades / month</td><td>${pm == null ? "–" : fmt(pm, 1)}</td><td>~${fmt(ex.per_month, 0)}</td></tr>
       <tr><td>Win rate</td><td>${data.stats.win_pct != null ? pct(data.stats.win_pct, 0) : "–"}</td><td>${pct(ex.win_pct, 0)}</td></tr>
       <tr><td>Profit factor</td><td>${data.stats.pf == null ? "–" : fmt(data.stats.pf, 2)}</td><td>${fmt(ex.pf, 2)}</td></tr>
-      <tr><td>Max drawdown</td><td>${pct(data.stats.dd_pct, 1)}</td><td>~11%<br><span class="hint">tự dừng khi quá 15%</span></td></tr>
+      <tr><td>Max drawdown</td><td>${pct(data.stats.dd_pct, 1)}</td><td>${ex.dd_pct ? `~${fmt(ex.dd_pct, 0)}%` : "–"}${halt ? `<br><span class="hint">tự dừng khi quá ${fmt(halt, 0)}%</span>` : ""}</td></tr>
     </tbody></table></div>
     <p class="hint">${esc(data.verdict || "")}${enough ? "" : ` — kết luận chỉ có nghĩa từ ${data.min_trades || 30} lệnh trở lên.`}</p>`;
 
-  const rows = list.length ? `<div class="list">${list.map((t) => `<div class="tr">
-      <span class="side ${t.is_short ? "short" : "long"}">${side(t.is_short)}</span>
-      <span class="tmain"><b>${esc(coin(t.pair))} <span class="num">${price(t.open_rate)} → ${price(t.close_rate)}</span></b>
-        <small>${esc(dateTime(t.close_timestamp))} · ${esc(exitReason(t.exit_reason))} · ${esc(duration((t.close_timestamp || 0) - (t.open_timestamp || 0)))} · ${fmt(t.leverage, 0)}x</small></span>
-      <span class="tpnl ${cls(t.profit_abs)}">${signedMoney(t.profit_abs, "", 2).trim()}<small>${signedPct((t.profit_ratio ?? 0) * 100)}</small></span></div>`).join("")}</div>`
-    : empty(filter === "all" ? "Chưa có lệnh nào đóng." : `Chưa có lệnh ${filter} nào đóng.`, "Chiến lược vào khoảng 19 lệnh/tháng trên 5 coin; lệnh đầu tiên có thể mất vài ngày.");
+  const rows = list.length ? `<div class="list">${list.map(tradeRow).join("")}</div>`
+    : empty(filter === "all" ? "Chưa có lệnh nào đóng." : `Chưa có lệnh ${filter} nào đóng.`, "Chiến lược vào khoảng 18 lệnh/tháng trên 5 coin; lệnh đầu tiên có thể mất vài ngày.");
 
   root.innerHTML = `<div class="cards">
     ${card("", `<div class="chips scroll" role="group" aria-label="Filter by coin">
