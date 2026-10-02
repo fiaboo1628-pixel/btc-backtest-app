@@ -9,7 +9,7 @@ Thoát lệnh:
   - SL ban đầu = r_atr × ATR(20) của nến tín hiệu (= 1R)
   - Thoát khi close thủng đáy (long) / vượt đỉnh (short) của `exit_period` nến trước đó
   - Khối lượng: rủi ro risk_pct % vốn mỗi lệnh; fixed_lev: luôn dùng max_lev để ký quỹ mỗi lệnh nhỏ
-  - Live/dry-run: ngừng vào lệnh mới khi sụt vốn đã chốt > 25% (halt_on)
+  - Live/dry-run (halt_on): sụt vốn đã chốt > 20% → rủi ro mỗi lệnh còn một nửa; > 30% → ngừng vào lệnh mới
 Backtest (freqtrade, 5 coin, 04/2020 → 09/2026, chi tiết 15m, phí + trượt 0.08%/chiều, rủi ro 0.25%, vốn 1000):
 1470 lệnh (~19/tháng), thắng 32%, PF 1.55, lãi kép 20.5%/năm, max DD 11%, 7/7 năm lãi. 5 coin được chọn theo
 thanh khoản hôm nay — trùng 5 coin tốt nhất trong research/robustness_trend_2026-10.md, nên số trên lạc quan
@@ -39,21 +39,36 @@ from freqtrade.strategy import (
 log = logging.getLogger(__name__)
 
 # Chỉ xét sụt vốn: luật "PF < 1 sau 60 lệnh" của DonchianRevert dừng nhầm 42% số lần bắt đầu trong năm đầu
-# (chiến lược thắng 32%, lãi theo cụm). 25% (02/10/2026): live chạy SL 3×ATR, rủi ro 1%/lệnh — backtest 5 coin vốn 500
-# 2021→10/2026 max DD 23.7%, ngưỡng 15% sẽ dừng bot ở đợt sụt bình thường. Đổi cùng HALT_DD_PCT trong bot/hub/live.py.
-HALT_DD = 0.25
+# (chiến lược thắng 32%, lãi theo cụm). Halt mềm (03/10/2026): sụt hiện tại > 20% → rủi ro mỗi lệnh còn một nửa (hồi
+# dưới 20% thì về lại); sụt lớn nhất > 30% → dừng vào lệnh mới. Walk-forward (research/wf_live_2026-10.md): backtest
+# max DD 24.7% nhưng ngoài mẫu dễ vượt, ngưỡng 25% cũ sẽ dừng bot ở đợt sụt bình thường.
+# Đổi cùng HALT_DD_PCT / REDUCE_DD_PCT trong bot/hub/live.py.
+HALT_DD = 0.30
+REDUCE_DD = 0.20
+REDUCE_SCALE = 0.5
 
 
-def halt_reason(start: float, profits: list[float]) -> str | None:
-    """Lý do dừng vào lệnh mới, None nếu chưa chạm ngưỡng. profits: lãi/lỗ USDT từng lệnh đã đóng, theo thứ tự đóng.
-    DD tính trên cả lịch sử, nên đã chạm thì dừng hẳn tới khi người dùng tắt halt_on."""
+def drawdown(start: float, profits: list[float]) -> tuple[float, float]:
+    """(sụt hiện tại, sụt lớn nhất) trên vốn đã chốt. profits: lãi/lỗ USDT từng lệnh đã đóng, theo thứ tự đóng."""
     eq = peak = start
-    dd = 0.0
+    worst = 0.0
     for p in profits:
         eq += p
         peak = max(peak, eq)
-        dd = max(dd, 1 - eq / peak)
+        worst = max(worst, 1 - eq / peak)
+    return 1 - eq / peak, worst
+
+
+def halt_reason(start: float, profits: list[float]) -> str | None:
+    """Lý do dừng vào lệnh mới, None nếu chưa chạm ngưỡng.
+    Tính trên sụt lớn nhất cả lịch sử, nên đã chạm thì dừng hẳn tới khi người dùng tắt halt_on."""
+    dd = drawdown(start, profits)[1]
     return f"sụt vốn {dd:.1%} > {HALT_DD:.0%}" if dd > HALT_DD else None
+
+
+def risk_scale(start: float, profits: list[float]) -> float:
+    """Hệ số nhân rủi ro mỗi lệnh: REDUCE_SCALE khi sụt hiện tại > REDUCE_DD, ngược lại 1."""
+    return REDUCE_SCALE if drawdown(start, profits)[0] > REDUCE_DD else 1.0
 
 
 class TrendBreakout(IStrategy):
@@ -77,7 +92,7 @@ class TrendBreakout(IStrategy):
     risk_pct = DecimalParameter(0.1, 20.0, default=0.25, decimals=2, space="sell", optimize=False)
     max_lev = IntParameter(1, 50, default=5, space="sell", optimize=False)
     fixed_lev = BooleanParameter(default=True, space="sell", optimize=False)
-    # Tự dừng vào lệnh mới (chỉ live/dry-run, backtest không đổi) khi chạm ngưỡng của halt_reason().
+    # Giảm khối lượng (risk_scale) và tự dừng vào lệnh mới (halt_reason); chỉ live/dry-run, backtest không đổi.
     halt_on = BooleanParameter(default=True, space="sell", optimize=False)
 
     def __init__(self, config: dict) -> None:
@@ -132,19 +147,31 @@ class TrendBreakout(IStrategy):
         need = math.ceil(self.risk_pct.value / 100 / r_pct - 1e-9)
         return float(min(max(need, 1), self.max_lev.value, math.floor(max_leverage), cap))
 
+    def _guarded(self) -> bool:
+        return bool(self.halt_on.value) and self.dp.runmode.value in ("live", "dry_run")
+
+    def _closed_profits(self) -> list[float]:
+        closed = sorted(Trade.get_trades_proxy(is_open=False), key=lambda t: t.close_date_utc)
+        return [t.close_profit_abs or 0.0 for t in closed]
+
     def custom_stake_amount(self, pair, current_time, current_rate, proposed_stake, min_stake,
                             max_stake, leverage, entry_tag, side, **kwargs) -> float:
         equity = self.wallets.get_total_stake_amount()
         risk = self._signal_atr(pair, current_time) * self.r_atr.value
         self._pending_risk[pair] = risk              # order_filled lưu lại vào lệnh
-        return float(min(equity * self.risk_pct.value / 100 / (risk / current_rate) / leverage, max_stake))
+        risk_pct = self.risk_pct.value
+        if self._guarded():
+            scale = risk_scale(self.wallets.get_starting_balance(), self._closed_profits())
+            if scale < 1:
+                log.warning("Sụt vốn > %.0f%%: rủi ro %s còn %.2f%%", REDUCE_DD * 100, pair, risk_pct * scale)
+            risk_pct *= scale
+        return float(min(equity * risk_pct / 100 / (risk / current_rate) / leverage, max_stake))
 
     def confirm_trade_entry(self, pair, order_type, amount, rate, time_in_force, current_time,
                             entry_tag, side, **kwargs) -> bool:
-        if not self.halt_on.value or self.dp.runmode.value not in ("live", "dry_run"):
+        if not self._guarded():
             return True
-        closed = sorted(Trade.get_trades_proxy(is_open=False), key=lambda t: t.close_date_utc)
-        why = halt_reason(self.wallets.get_starting_balance(), [t.close_profit_abs or 0.0 for t in closed])
+        why = halt_reason(self.wallets.get_starting_balance(), self._closed_profits())
         if why:
             # ERROR: watchdog của hub (alerts.py) đẩy dòng này về điện thoại
             log.error("DỪNG VÀO LỆNH MỚI: %s — bỏ tín hiệu %s %s. Xem lại rồi tắt halt_on để chạy tiếp.",

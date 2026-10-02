@@ -201,7 +201,7 @@ def test_live_summary(tmp_path, monkeypatch):
 
 
 def test_live_halt_and_equity(tmp_path):
-    """Sụt vốn tính như TrendBreakout.halt_reason; dừng khi quá 25% (halt_on bật) hoặc log đã báo dừng."""
+    """Sụt vốn tính như TrendBreakout.halt_reason; dừng khi quá 30% (halt_on bật) hoặc log đã báo dừng."""
     import live
     tr = lambda ts, p: {"close_timestamp": ts, "profit_abs": p}  # noqa: E731
     closed = [tr(3, -200), tr(1, 50), tr(2, -120)]                    # thứ tự đóng: +50, -120, -200
@@ -210,11 +210,16 @@ def test_live_halt_and_equity(tmp_path):
     assert dd == {"current_pct": round(100 * (1 - 730 / 1050), 2), "max_pct": round(100 * (1 - 730 / 1050), 2)}
     assert live.drawdown(0, []) == {"current_pct": 0.0, "max_pct": 0.0}
     h = live.halt_view(1000, closed, True, [])
-    assert h["halted"] is True and h["max_dd_pct"] > 25 and h["threshold_pct"] == 25
+    assert h["halted"] is True and h["max_dd_pct"] > 30 and h["threshold_pct"] == 30 and h["reduced"] is False
     assert live.halt_view(1000, closed, False, [])["halted"] is False          # người dùng đã tắt halt_on
     assert live.halt_view(1000, [tr(1, -50)], True, [])["halted"] is False
     assert live.halt_view(1000, [], True, [{"msg": "DỪNG VÀO LỆNH MỚI: sụt vốn 26% > 25%"}])["halted"] is True
     assert live.halt_view(1000, [], None, [])["halt_on"] is None
+    # sụt hiện tại 20–30%: giảm nửa khối lượng, chưa dừng; hồi về dưới 20% thì hết giảm
+    h = live.halt_view(1000, [tr(1, -250)], True, [])
+    assert h["reduced"] is True and h["halted"] is False and h["reduce_pct"] == 20
+    assert live.halt_view(1000, [tr(1, -250), tr(2, 100)], True, [])["reduced"] is False
+    assert live.halt_view(1000, [tr(1, -250)], False, [])["reduced"] is False
     # halt_on đọc từ file tham số LIVE (trang Backtest ghi), không có file = mặc định bật
     assert live.halt_on_param(tmp_path, "TrendBreakout") is True
     (tmp_path / "TrendBreakout.json").write_text(json.dumps({"params": {"sell": {"halt_on": False}}}))
@@ -701,3 +706,21 @@ def test_weekly_report():
     assert "Live: 2 lệnh" in out["text"] and "PF 2.00" in out["text"]
     out = asyncio.run(weekly.build(Fake([]), Down()))
     assert "Paper: không đọc được" in out["text"] and "match" not in out
+
+
+def test_strategy_soft_halt_matches_hub():
+    """Hàm halt/giảm khối lượng của TrendBreakout (chạy riêng, không cần talib) và ngưỡng khớp với hub."""
+    import ast
+
+    import live
+    src = (Path(__file__).resolve().parents[1] / "user_data/strategies/TrendBreakout.py").read_text(encoding="utf-8")
+    keep = [n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef)
+            or isinstance(n, ast.Assign) and all(getattr(t, "id", "").isupper() for t in n.targets)]
+    ns: dict = {}
+    exec(compile(ast.Module(body=keep, type_ignores=[]), "TrendBreakout", "exec"), ns)
+    assert ns["HALT_DD"] * 100 == live.HALT_DD_PCT and ns["REDUCE_DD"] * 100 == live.REDUCE_DD_PCT
+    assert ns["risk_scale"](1000, [-150]) == 1.0                    # sụt 15%
+    assert ns["risk_scale"](1000, [-250]) == 0.5                    # sụt 25%: nửa khối lượng
+    assert ns["risk_scale"](1000, [-250, 100]) == 1.0               # hồi về sụt 15%
+    assert ns["halt_reason"](1000, [-250]) is None
+    assert ns["halt_reason"](1000, [-310, 200]) is not None         # đã chạm 31% thì dừng hẳn dù đã hồi

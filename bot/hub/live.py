@@ -15,8 +15,9 @@ from fastapi import APIRouter
 import weekly
 from tune import FtClient
 
-# Ngưỡng tự dừng vào lệnh mới của chiến lược (TrendBreakout.HALT_DD); không import chiến lược vì cần talib.
-HALT_DD_PCT = 25.0
+# Ngưỡng của chiến lược (TrendBreakout.HALT_DD / REDUCE_DD); không import chiến lược vì cần talib.
+HALT_DD_PCT = 30.0                       # sụt lớn nhất quá mức này: dừng vào lệnh mới
+REDUCE_DD_PCT = 20.0                     # sụt hiện tại quá mức này: rủi ro mỗi lệnh còn một nửa
 HALT_LOG = "DỪNG VÀO LỆNH MỚI"          # dòng log ERROR của chiến lược khi đã dừng
 
 
@@ -76,11 +77,14 @@ def halt_on_param(strategy_dir: Path | None, strategy: str | None) -> bool | Non
 
 def halt_view(start: float, closed: list[dict], halt_on: bool | None, logs: list[dict]) -> dict:
     """Bot có đang tự dừng vào lệnh mới không, và còn cách ngưỡng bao xa."""
+    closed = sorted(closed, key=lambda t: t.get("close_timestamp") or 0)
     dd = drawdown(start or 0.0, [t.get("profit_abs") or 0.0 for t in closed])
     over = dd["max_pct"] > HALT_DD_PCT
     logged = any(HALT_LOG in (l.get("msg") or "") for l in logs)
-    return {"threshold_pct": HALT_DD_PCT, "current_dd_pct": dd["current_pct"], "max_dd_pct": dd["max_pct"],
-            "halt_on": halt_on, "halted": bool(halt_on is not False and (over or logged))}
+    halted = bool(halt_on is not False and (over or logged))
+    return {"threshold_pct": HALT_DD_PCT, "reduce_pct": REDUCE_DD_PCT, "current_dd_pct": dd["current_pct"],
+            "max_dd_pct": dd["max_pct"], "halt_on": halt_on, "halted": halted,
+            "reduced": bool(halt_on is not False and not halted and dd["current_pct"] > REDUCE_DD_PCT)}
 
 
 def disk_mode(mode_file: Path) -> str | None:

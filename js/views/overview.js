@@ -96,6 +96,7 @@ function paint(store) {
       ${drawdownBar(halt)}
       <p class="hint">${halt.halt_on === false ? "Tự dừng đang TẮT (halt_on) — bot sẽ không tự ngừng khi thua nhiều." :
         halt.halted ? "Đã quá ngưỡng: bot không vào lệnh mới. Lệnh đang mở vẫn được quản lý bình thường." :
+        halt.reduced ? `Sụt quá ${pct(halt.reduce_pct, 0)}: lệnh mới chỉ rủi ro một nửa. Còn cách ngưỡng tự dừng ${pct(Math.max(0, halt.threshold_pct - halt.max_dd_pct), 1)}.` :
         `Còn cách ngưỡng tự dừng ${pct(Math.max(0, halt.threshold_pct - halt.max_dd_pct), 1)}.`}</p>`)}
 
     ${card("Open positions", openTrades(live, cur), { wide: true, hint: `${live.open.length}` })}
