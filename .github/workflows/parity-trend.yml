@@ -1,0 +1,53 @@
+# Tạo fixture tests/fixtures/parity_trend_4h.json.gz: freqtrade backtest TrendBreakout 5 coin của bot trên dữ liệu Binance
+# thật (data.binance.vision), nến 4h, không nến chi tiết, tham số mặc định — để tests/parity_trend.test.mjs so từng lệnh
+# với backtest nhiều coin của app. Kết quả: artifact parity-trend (tải về, chép vào tests/fixtures/, commit).
+name: parity-trend
+
+on:
+  workflow_dispatch:
+    inputs:
+      timerange:
+        description: "Khoảng backtest (freqtrade --timerange)"
+        default: "20250901-20260831"
+  push:
+    branches: ["claude/**", "research/**"]
+    paths: ["tools/export_parity_trend.py", "tools/parity_trend_cfg.json", ".github/workflows/parity-trend.yml"]
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TIMERANGE: ${{ inputs.timerange || '20250901-20260831' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: .github/workflows/parity-trend.yml
+      - name: Cài freqtrade (cùng bản bot đang chạy)
+        run: pip install -q freqtrade==2026.8
+      - name: Tải nến 4h + mark + funding (data.binance.vision)
+        working-directory: bot
+        run: |
+          END=$(date -u -d "$(date -u +%Y-%m-01) -1 month" +%Y-%m)
+          python research/binance_vision.py --pairs BTC ETH SOL XRP DOGE --tf 4h --start 2024-06 --end $END --out /tmp/par/data
+      - name: Backtest freqtrade
+        working-directory: bot
+        run: |
+          mkdir -p /tmp/par/ud/strategies /tmp/par/ud/backtest_results
+          cp user_data/strategies/TrendBreakout.py /tmp/par/ud/strategies/
+          cp ../tools/parity_trend_cfg.json /tmp/par/cfg.json
+          python run_futures.py backtesting -c /tmp/par/cfg.json --userdir /tmp/par/ud --datadir /tmp/par/data \
+            --strategy-path /tmp/par/ud/strategies --strategy TrendBreakout --timerange $TIMERANGE --export trades \
+            --backtest-directory /tmp/par/ud/backtest_results --cache none | tail -40
+      - name: Xuất fixture và chạy test parity với fixture mới
+        run: |
+          python tools/export_parity_trend.py /tmp/par /tmp/par/out
+          PARITY_TREND_FIXTURE=/tmp/par/out/parity_trend_4h.json.gz node --test tests/parity_trend.test.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: parity-trend
+          path: /tmp/par/out/parity_trend_4h.json.gz
