@@ -116,6 +116,11 @@ label.inline select { width: auto; }
 .cgrid label { margin-bottom: 4px; }
 .c-params { display: contents; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; }
+.chip.pick { cursor: pointer; display: inline-flex; align-items: center; gap: 6px; color: var(--text); }
+.chip.pick input { margin: 0; accent-color: var(--up); }
+.chip.pick.off { color: var(--muted); text-decoration: line-through; cursor: default; }
+label.check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+label.check input { width: auto; margin: 0; accent-color: var(--up); }
 .chip { font-size: 12px; color: var(--muted); background: var(--panel-2); border-radius: 99px; padding: 4px 10px;
   display: inline-flex; align-items: center; gap: 6px; }
 .tablewrap { overflow-x: auto; margin: 0 -4px; }

@@ -129,7 +129,7 @@
 
     <div class="card" id="botCard" hidden>
       <h2>Bot</h2>
-      <p class="hint">Send these thresholds to the running DonchianRevert bot. Only the numbers change — the bot's logic stays the same. An open trade keeps its initial stop (1R), but trailing and take-profit switch to the new values right away.</p>
+      <p class="hint" id="botHint">Send these thresholds to the running bot. Only the numbers change — the bot's logic stays the same; the strategy has to follow the bot's template. An open trade keeps its initial stop (1R); exits switch to the new values right away.</p>
       <p class="hint warn" id="botFit"></p>
       <div class="row">
         <button class="btn primary grow" id="btnSendBot" type="button">Send to bot</button>
@@ -148,6 +148,19 @@
         <label>Split <input type="date" id="rSplit" value="2025-01-01"></label>
       </div>
       <div id="attemptWarn"></div>
+      <details class="more" id="portBox">
+        <summary>Portfolio · several coins, one account</summary>
+        <p class="hint">Runs the strategy on every ticked coin with shared capital, like the bot (BTC ETH SOL XRP DOGE, up to 5 open trades, one per coin). Each coin needs data with the same market and candle size as the data <b>In use</b>.</p>
+        <div class="chips" id="portCoins"></div>
+        <div class="grid2">
+          <label>Max open trades <input type="number" id="portMax" min="1" max="20" step="1" value="5" inputmode="numeric"></label>
+          <label class="check"><input type="checkbox" id="portHalt"> Stop new trades after a 15% drawdown (like the bot)</label>
+        </div>
+        <div class="row">
+          <button class="btn primary grow" id="btnRunPort" type="button">Run portfolio</button>
+          <button class="btn" id="btnDlCoins" type="button" title="Download the bot's coins that are missing, same market and candle size as the data in use">Download bot coins</button>
+        </div>
+      </details>
     </div>
     <div id="resBox" hidden>
       <div class="card hero">
@@ -169,6 +182,10 @@
       <div class="card">
         <h2>By year</h2>
         <div class="years" id="resYears"></div>
+      </div>
+      <div class="card" id="resCoinsCard" hidden>
+        <h2>By coin</h2>
+        <div class="tablewrap"><table id="resCoins"></table></div>
       </div>
       <div class="card">
         <h2>Exits</h2>

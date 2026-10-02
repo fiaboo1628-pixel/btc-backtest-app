@@ -31,12 +31,16 @@ function toast(text, kind = "ok") {
 }
 
 // ============================================================== state
+// 5 coin bot đang chạy (bot/deploy/config.base.json pair_whitelist), đúng thứ tự whitelist
+const BOT_COINS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT"];
 const state = {
   presets: [],
   strategy: null,
   activeId: store.get("activeDataset", null),
   dataset: null,          // {meta, candles, funding}
   abort: null,
+  // nhiều coin chung tài khoản: coin đã tích, số lệnh mở tối đa, tự dừng khi sụt vốn 15%
+  portfolio: store.get("portfolio", { coins: BOT_COINS, maxOpen: 5, halt: false }),
 };
 
 // ============================================================== tabs
@@ -141,7 +145,7 @@ async function refreshDatasets() {
 async function useDataset(id) {
   state.activeId = id; store.set("activeDataset", id);
   state.dataset = await Data.loadDataset(id);
-  updateDsLabel(); refreshTfOptions(); await refreshDatasets();
+  updateDsLabel(); refreshTfOptions(); await refreshDatasets(); renderPortfolioCoins();
   const m = state.dataset.meta;
   if (!$("#rFrom").value || Date.parse($("#rFrom").value) < m.first) $("#rFrom").value = day(m.first);
 }
@@ -312,20 +316,8 @@ async function runBacktest() {
     ? `<div class="msg warn">${n} variants tried — good results get likelier by luck. Trust P2 and dry-run.</div>` : "";
   const btn = $("#btnRun"), label = $("#btnRun span"); btn.disabled = true; label.textContent = "…";
   const { candles, funding, meta } = state.dataset;
-  const id = ++runId;
-  const from = Date.parse($("#rFrom").value) || meta.first, to = $("#rTo").value ? Date.parse($("#rTo").value) : null;
-  const split = Date.parse($("#rSplit").value) || null;
   const t0 = performance.now();
-  const w = getWorker();
-  const res = await new Promise((ok) => {
-    const done = (r) => { w.removeEventListener("message", h); w.removeEventListener("error", fail); ok(r); };
-    const h = (e) => { if (e.data.id === id) done(e.data); };
-    // worker chết (hết bộ nhớ, lỗi tải module): báo lỗi thay vì kẹt nút Run, lần sau tạo worker mới
-    const fail = (e) => { e.preventDefault?.(); w.terminate(); worker = null; done({ ok: false, error: `Backtest crashed: ${e.message || "out of memory?"}` }); };
-    w.addEventListener("message", h);
-    w.addEventListener("error", fail);
-    w.postMessage({ id, source: candles, sourceTf: meta.tf, funding: meta.market === "futures" ? funding : [], strategy: s, split, from, to });
-  });
+  const res = await runInWorker({ source: candles, sourceTf: meta.tf, funding: meta.market === "futures" ? funding : [], strategy: s, ...rangeArgs() });
   btn.disabled = false; label.textContent = "Run";
   if (!res.ok) { toast(res.error, "err"); return; }
   toast("");
@@ -333,16 +325,110 @@ async function runBacktest() {
   renderResult(res, performance.now() - t0);
 }
 
+function rangeArgs() {
+  const meta = state.dataset.meta;
+  return { from: Date.parse($("#rFrom").value) || meta.first, to: $("#rTo").value ? Date.parse($("#rTo").value) : null,
+    split: Date.parse($("#rSplit").value) || null };
+}
+
+function runInWorker(msg) {
+  const id = ++runId;
+  const w = getWorker();
+  return new Promise((ok) => {
+    const done = (r) => { w.removeEventListener("message", h); w.removeEventListener("error", fail); ok(r); };
+    const h = (e) => { if (e.data.id === id) done(e.data); };
+    // worker chết (hết bộ nhớ, lỗi tải module): báo lỗi thay vì kẹt nút Run, lần sau tạo worker mới
+    const fail = (e) => { e.preventDefault?.(); w.terminate(); worker = null; done({ ok: false, error: `Backtest crashed: ${e.message || "out of memory?"}` }); };
+    w.addEventListener("message", h);
+    w.addEventListener("error", fail);
+    w.postMessage({ id, ...msg });
+  });
+}
+
+// ---------------------------------------------------------------- nhiều coin chung tài khoản
+/** Bộ dữ liệu cùng sàn + khung nến với bộ đang dùng, theo coin. */
+async function portfolioSets() {
+  const m = state.dataset?.meta;
+  if (!m) return new Map();
+  const list = await Data.listDatasets();
+  return new Map(list.filter((d) => d.market === m.market && d.tf === m.tf && d.count > 0).map((d) => [d.symbol, d]));
+}
+
+async function renderPortfolioCoins() {
+  const box = $("#portCoins");
+  const sets = await portfolioSets();
+  const p = state.portfolio;
+  // coin của bot trước (đúng thứ tự whitelist), rồi coin khác đã tải
+  const names = [...BOT_COINS, ...[...sets.keys()].filter((s) => !BOT_COINS.includes(s)).sort()];
+  box.innerHTML = names.map((sym) => {
+    const have = sets.has(sym), on = have && p.coins.includes(sym);
+    return `<label class="chip pick ${have ? "" : "off"}" title="${have ? "" : "Not downloaded for this market and candle size"}">
+      <input type="checkbox" data-coin="${esc(sym)}" ${on ? "checked" : ""} ${have ? "" : "disabled"}> ${esc(sym.replace(/USDT$/, ""))}</label>`;
+  }).join("") || `<span class="hint">Pick data first.</span>`;
+  $("#portMax").value = p.maxOpen; $("#portHalt").checked = !!p.halt;
+  $("#btnDlCoins").hidden = BOT_COINS.every((s) => sets.has(s));
+}
+
+async function runPortfolio() {
+  if (!state.dataset) { showTab("data"); toast("Download or pick data first.", "err"); return; }
+  const s = state.strategy;
+  if (!s.long.length && !s.short.length) { showTab("strategy"); toast("Add at least one condition.", "err"); return; }
+  const sets = await portfolioSets();
+  const order = [...BOT_COINS, ...[...sets.keys()].filter((x) => !BOT_COINS.includes(x)).sort()];
+  const coins = order.filter((x) => state.portfolio.coins.includes(x) && sets.has(x));
+  if (!coins.length) { toast("Tick at least one coin that has data.", "err"); return; }
+  showTab("result");
+  const btn = $("#btnRunPort"); btn.disabled = true; btn.textContent = "…";
+  const meta = state.dataset.meta;
+  const t0 = performance.now();
+  try {
+    const data = await Promise.all(coins.map((sym) => Data.loadDataset(sets.get(sym).id)));
+    const res = await runInWorker({
+      kind: "portfolio", sourceTf: meta.tf, strategy: s, maxOpen: state.portfolio.maxOpen, haltDD: state.portfolio.halt ? 0.15 : 0,
+      coins: data.map((d, i) => ({ symbol: coins[i], source: d.candles, funding: meta.market === "futures" ? d.funding : [] })),
+      ...rangeArgs(),
+    });
+    if (!res.ok) { toast(res.error, "err"); return; }
+    toast("");
+    state.lastRun = { replay: [], range: res.range, tf: s.tradeTf, wallet: s.account?.wallet ?? 1000, key: JSON.stringify(s), coins };
+    renderResult(res, performance.now() - t0);
+  } finally { btn.disabled = false; btn.textContent = "Run portfolio"; }
+}
+
+/** Tải các coin của bot còn thiếu, cùng sàn/khung nến/ngày bắt đầu với bộ đang dùng (tuần tự, dùng Download sẵn có). */
+async function downloadBotCoins() {
+  const m = state.dataset?.meta;
+  if (!m) { toast("Pick data first.", "err"); return; }
+  const sets = await portfolioSets();
+  for (const sym of BOT_COINS) {
+    if (sets.has(sym)) continue;
+    await startDownload({ market: m.market, symbol: sym, tf: m.tf, from: m.first });
+    if (!state.dataset || state.dataset.meta.symbol !== sym) break;           // tải lỗi / dừng → thôi
+  }
+  await useDataset(Data.datasetId(m.market, m.symbol, m.tf)).catch(() => {});    // quay lại bộ đang dùng
+}
+
 function renderResult(r, ms) {
   $("#resBox").hidden = false;
   requestAnimationFrame(() => $("#resBox").scrollIntoView({ behavior: "smooth", block: "start" }));
   const s = state.strategy, P = r.periods, A = P[0];
-  $("#resMeta").textContent = `${s.name} · ${s.tradeTf}${r.detailTf ? ` · exits on ${r.detailTf}` : ""} · ${fmtInt(r.candles)} bars · ${fmt(ms / 1000, 1)} s`;
+  const coins = r.portfolio ? state.lastRun.coins.map((c) => c.replace(/USDT$/, "")).join(" ") : "";
+  $("#resMeta").textContent = `${s.name} · ${s.tradeTf}${r.detailTf ? ` · exits on ${r.detailTf}` : ""}${r.portfolio ? ` · ${coins} · one account, max ${state.portfolio.maxOpen} open` : ""} · ${fmtInt(r.candles)} bars · ${fmt(ms / 1000, 1)} s`;
   const ex = s.exit || {};
   // trailing sát (< 0.5R) được lợi ảo khi không biết giá trong nến đi lên hay xuống trước.
   // Đo trên BTC 15m 2021–2026, gap 0.2R: chỉ nến 15m +110%, chi tiết 5m +88%, chi tiết 1m +77%.
-  $("#resWarn").textContent = ex.trailStartR > 0 && ex.trailDistR < 0.5 && r.detailTf !== "1m"
-    ? `Trail gap ${ex.trailDistR}R: results with ${r.detailTf || s.tradeTf} candles look better than reality. Download 1m data for accurate trailing exits.` : "";
+  const warns = [];
+  if (ex.trailStartR > 0 && ex.trailDistR < 0.5 && r.detailTf !== "1m")
+    warns.push(`Trail gap ${ex.trailDistR}R: results with ${r.detailTf || s.tradeTf} candles look better than reality. Download 1m data for accurate trailing exits.`);
+  if (r.halted) warns.push(`Stopped opening new trades on ${day(r.haltedAt)} after a 15% drawdown (the bot's halt). Open trades were managed to their exit.`);
+  $("#resWarn").textContent = warns.join(" ");
+  $("#btnReplay").hidden = !!r.portfolio;                  // Replay vẽ một coin
+  $("#resCoinsCard").hidden = !r.portfolio;
+  if (r.portfolio) {
+    $("#resCoins").innerHTML = `<thead><tr><th>Coin</th><th>Trades</th><th>P&amp;L</th><th>PF</th><th>Win</th></tr></thead><tbody>`
+      + r.perCoin.map((c) => `<tr><td>${esc(c.pair.replace(/USDT$/, ""))}</td><td>${c.trades} <small>${c.long}L/${c.short}S</small></td>
+        <td class="${cls(c.pnl)}">${sign(c.pnl, 0)}</td><td>${fmt(c.profitFactor)}</td><td>${fmt(c.winrate * 100, 0)}%</td></tr>`).join("") + "</tbody>";
+  }
   const my = (t) => { const d = new Date(t); return `${String(d.getUTCMonth() + 1).padStart(2, "0")}/${String(d.getUTCFullYear()).slice(2)}`; };
 
   // tiêu đề: lãi/lỗ tổng + so với mua & giữ
@@ -399,12 +485,13 @@ function renderResult(r, ms) {
     ${row("PF", (p) => fmt(p.profitFactor))}
     ${row("Trades", (p) => `${p.trades} <small>${p.long}L/${p.short}S</small>`)}
     ${row("Win rate", (p) => `${fmt(p.winrate * 100, 1)}%`)}
-    ${row("Buy &amp; hold", (p) => `<span class="${cls(p.marketPct)}">${sign(p.marketPct)}%</span>`)}</tbody>`;
+    ${row(r.portfolio ? "Buy &amp; hold (avg)" : "Buy &amp; hold", (p) => `<span class="${cls(p.marketPct)}">${sign(p.marketPct)}%</span>`)}</tbody>`;
 
   // lệnh gần nhất
+  const px = (v) => fmt(v, v >= 100 ? 1 : v >= 1 ? 3 : 5);
   $("#resTrades").innerHTML = r.trades.slice(0, 100).map((x) => `<div class="tr">
       <span class="side ${x.dir === 1 ? "long" : "short"}">${x.dir === 1 ? "L" : "S"}</span>
-      <span class="tmain"><b>${fmt(x.entry, 1)} → ${fmt(x.exit, 1)}</b><small>${new Date(x.exitT).toISOString().slice(0, 16).replace("T", " ")} · ${names[x.reason] || x.reason}</small></span>
+      <span class="tmain"><b>${x.pair ? `${esc(x.pair.replace(/USDT$/, ""))} ` : ""}${px(x.entry)} → ${px(x.exit)}</b><small>${new Date(x.exitT).toISOString().slice(0, 16).replace("T", " ")} · ${names[x.reason] || x.reason}</small></span>
       <b class="${cls(x.pnl)}">${sign(x.pnl, 2)}</b></div>`).join("");
 }
 
@@ -443,14 +530,19 @@ async function setupHub() {
   }
   if (f.tune) {
     $("#botCard").hidden = false;
-    refreshBotFit();
+    // khuôn tham số theo chiến lược bot đang chạy (/api/hub .strategy; chắc hơn thì /api/tune/schema .strategy)
+    state.botStrategy = h.strategy || null;
+    fetch("/api/tune/schema", { cache: "no-store" }).then((r) => r.json()).then((j) => { if (j.strategy) state.botStrategy = j.strategy; })
+      .catch(() => {}).finally(refreshBotFit);
   }
 }
 
 function refreshBotFit() {
   if (!state.hub?.features?.tune) return;
+  const bot = state.botStrategy || undefined;
+  $("#botHint").textContent = `Send these thresholds to the running ${bot || "bot"}. Only the numbers change — the bot's logic stays the same; the strategy has to follow the bot's template (load the "${bot === "DonchianRevert" ? "DonchianRevert" : "TrendBreakout"}" preset to start). An open trade keeps its initial stop (1R); exits switch to the new values right away.`;
   let msg = "";
-  try { toBotParams(state.strategy); } catch (e) { msg = `Can't send this strategy: ${e.message}.`; }
+  try { toBotParams(state.strategy, bot); } catch (e) { msg = `Can't send this strategy: ${e.message}.`; }
   $("#botFit").textContent = msg;
   $("#btnSendBot").disabled = !!msg;
   $("#btnFromBot").disabled = !!msg;
@@ -459,18 +551,22 @@ function refreshBotFit() {
 // Nạp tham số bot đang chạy vào chiến lược hiện tại, để backtest đúng bộ số bot dùng (preset là giá trị mặc định).
 async function loadBotValues() {
   try {
-    const live = (await (await fetch("/api/tune/schema", { cache: "no-store" })).json()).live;
-    if (!live) throw new Error("the bot isn't answering");
-    loadStrategy(fromBotParams(state.strategy, live));
+    const sch = await (await fetch("/api/tune/schema", { cache: "no-store" })).json();
+    if (!sch.live) throw new Error("the bot isn't answering");
+    state.botStrategy = sch.strategy || state.botStrategy;
+    loadStrategy(fromBotParams(state.strategy, sch.live, state.botStrategy || undefined));
     toast("Loaded the bot's current values. Tap Run to backtest them.", "ok");
   } catch (e) { toast(`Can't load the bot's values: ${e.message}`, "err"); }
 }
 
 async function sendToBot() {
-  let params;
-  try { ({ params } = toBotParams(state.strategy)); } catch (e) { toast(e.message, "err"); return; }
   let live = null;
-  try { live = (await (await fetch("/api/tune/schema", { cache: "no-store" })).json()).live; } catch { /* vẫn cho gửi */ }
+  try {
+    const sch = await (await fetch("/api/tune/schema", { cache: "no-store" })).json();
+    live = sch.live; state.botStrategy = sch.strategy || state.botStrategy;
+  } catch { /* vẫn cho gửi theo khuôn đã biết */ }
+  let params;
+  try { ({ params } = toBotParams(state.strategy, state.botStrategy || undefined)); } catch (e) { toast(e.message, "err"); return; }
   const changes = Object.entries(params).filter(([k, v]) => !live || live[k] !== v)
     .map(([k, v]) => `${k}: ${live ? `${live[k]} → ` : ""}${v}`);
   if (!changes.length) { toast("The bot already runs these values.", "ok"); return; }
@@ -584,6 +680,19 @@ async function init() {
   $("#btnSendBot").addEventListener("click", sendToBot);
   $("#btnFromBot").addEventListener("click", loadBotValues);
   setupHub();
+
+  // nhiều coin chung tài khoản
+  const savePort = () => store.set("portfolio", state.portfolio);
+  $("#portCoins").addEventListener("change", (e) => {
+    const sym = e.target.dataset.coin; if (!sym) return;
+    const set = new Set(state.portfolio.coins);
+    if (e.target.checked) set.add(sym); else set.delete(sym);
+    state.portfolio.coins = [...set]; savePort();
+  });
+  $("#portMax").addEventListener("change", (e) => { state.portfolio.maxOpen = Math.max(1, Math.round(Number(e.target.value) || 5)); e.target.value = state.portfolio.maxOpen; savePort(); });
+  $("#portHalt").addEventListener("change", (e) => { state.portfolio.halt = e.target.checked; savePort(); });
+  $("#btnRunPort").addEventListener("click", runPortfolio);
+  $("#btnDlCoins").addEventListener("click", downloadBotCoins);
 
   await refreshDatasets();
   if (state.activeId) await useDataset(state.activeId).catch(() => refreshDatasets());
