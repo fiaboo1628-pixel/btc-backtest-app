@@ -41,7 +41,7 @@ grep -q "BOT_DB=demo" .env 2>/dev/null && mode="Binance DEMO (key từ Codespace
   echo
   echo "## Mở giao diện"
   echo "Tab **Ports** (cạnh Terminal) → dòng **8080 FreqUI (bot)** → bấm biểu tượng quả địa cầu."
-  echo "FreqUI: đăng nhập bằng dòng *FreqUI* ở trên. Dòng **8090** là hub: app backtest + tab Live + /tune/ (đăng nhập bằng dòng *hub*)."
+  echo "FreqUI: đăng nhập bằng dòng *FreqUI* ở trên. Dòng **8090** là hub: app điều khiển bot (đăng nhập bằng dòng *hub*)."
   echo
   echo "_Dữ liệu nến cho trang Chỉnh tham số đang tải ngầm (vài phút) — backtest dùng được sau khi xong._"
 } > "$OUT"

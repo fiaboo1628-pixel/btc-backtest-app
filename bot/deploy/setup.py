@@ -8,11 +8,11 @@ Chuẩn bị lần đầu cho bộ dry-run. Chạy trong container (không cần
 
 Việc làm:
   - secrets/live.json, secrets/lab.json, secrets/paper.json: user/mật khẩu API ngẫu nhiên cho bot, LAB, bot paper
-  - Cảnh báo sự cố (hub canh bot: chết, kẹt, mất stop): bật "Alerts on this device" ở tab Live trên điện thoại,
+  - Cảnh báo sự cố (hub canh bot: chết, kẹt, mất stop): bật "Thông báo trên máy này" ở màn Cảnh báo của app trên điện thoại,
     hoặc --telegram. Tiền thật bắt buộc có ít nhất một kênh.
   - --telegram: thông báo lệnh (freqtrade) + cảnh báo sự cố qua Telegram. Token lấy qua getpass hoặc TELEGRAM_TOKEN / TELEGRAM_CHAT_ID, không qua tham số dòng lệnh
     (lộ trong `ps` và lịch sử shell).
-  - hub.json: cấu hình hub — app backtest, tab Live, Chỉnh tham số, nến trên máy chủ (thay cho tuner.json cũ)
+  - hub.json: cấu hình hub — app điều khiển bot (Tổng quan, Lệnh, Backtest, Dữ liệu, Cảnh báo); thay cho tuner.json cũ
   - chép chiến lược sang user_data/strategies_lab/ cho LAB
   - tải nến các cặp trong config.base.json (khung chiến lược + 15m) từ 2021 (kèm funding) để LAB backtest được
   - --api: cho bot vào lệnh thật trên sàn bằng API key (hỏi Demo hay Thật; key không hiện lên màn hình).
@@ -210,7 +210,7 @@ def guard_open_trades(interactive: bool) -> None:
     for tid, pair, short, opened in trades:
         print(f"   #{tid} {pair} {'Short' if short else 'Long'} từ {opened}")
     print("Đổi chế độ bây giờ thì bot sẽ KHÔNG còn quản lý các lệnh này (không dời trailing stop, không chốt lời).\n"
-          "Nên đóng lệnh trong FreqUI / tab Live trước (forceexit), rồi chạy lại.")
+          "Nên đóng lệnh trong FreqUI trước (forceexit), rồi chạy lại.")
     if not interactive or input('Vẫn đổi? Gõ đúng chữ BO LENH để tiếp tục: ').strip() != "BO LENH":
         raise SystemExit("Huỷ, không đổi gì.")
 
@@ -223,7 +223,7 @@ def ask(prompt: str, choices: dict[str, str]) -> str:
 
 
 def has_alerts(creds: dict) -> bool:
-    """Có kênh cảnh báo: Telegram, hoặc ít nhất một điện thoại đã bật Alerts ở tab Live (hub lưu trong push.json)."""
+    """Có kênh cảnh báo: Telegram, hoặc ít nhất một điện thoại đã bật thông báo ở màn Cảnh báo của app (hub lưu trong push.json)."""
     if creds["live"].get("telegram", {}).get("enabled"):
         return True
     try:
@@ -240,7 +240,7 @@ def set_api(alerts_on: bool) -> None:
     kind = ask("Key của tài khoản nào? [d] Demo / [t] Thật: ", {"d": "demo", "t": "real"})
     if kind == "real":
         if not alerts_on:
-            raise SystemExit("Tiền thật cần kênh cảnh báo trước: bật \"Alerts on this device\" ở tab Live trên điện thoại "
+            raise SystemExit("Tiền thật cần kênh cảnh báo trước: bật \"Thông báo trên máy này\" ở màn Cảnh báo của app trên điện thoại "
                              "(hoặc setup --no-download --telegram), rồi chạy lại.")
         print("\nTIỀN THẬT. Key phải: chỉ bật Futures, KHÔNG bật rút tiền, giới hạn IP của máy này.")
         if input('Gõ đúng chữ REAL để tiếp tục: ').strip() != "REAL":

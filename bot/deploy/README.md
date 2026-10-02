@@ -7,7 +7,7 @@ Gồm 3 phần, chạy bằng Docker (Windows, Mac, Linux đều được):
 |---|---|---|
 | `live` | 8080 | Bot dry-run + FreqUI (xem lệnh, lãi lỗ, biểu đồ) |
 | `lab` | 8081 | freqtrade webserver cho trang Chỉnh tham số backtest |
-| `hub` | 8090 | **Một trang cho tất cả**: app backtest (nến lấy từ máy chủ, tự cập nhật), tab **Live** theo dõi bot, nút **Send to bot**, trang Chỉnh tham số ở `/tune/` |
+| `hub` | 8090 | **App điều khiển bot** (iPhone/PC): Tổng quan, Lịch sử lệnh, Backtest + chỉnh tham số, Dữ liệu nến, Cảnh báo & báo cáo (xem `../hub/README.md`) |
 
 Mọi cổng chỉ mở trên `127.0.0.1` của máy. Xem từ điện thoại khi ra ngoài: dùng Tailscale (bước 5).
 
@@ -34,9 +34,9 @@ Mật khẩu hub và FreqUI không in ra màn hình; xem bằng `docker compose 
 File mật khẩu/key (`secrets/`, `hub.json`) có quyền 600; setup đặt lại quyền mỗi lần chạy.
 
 **Cảnh báo (bắt buộc trước tiền thật)**: hub canh bot mỗi phút — báo khi bot không trả lời, không xử lý nến
-quá 3 phút, bị dừng, có lệnh mở mà không có stop trên sàn, hoặc log có lỗi. Nhận trên điện thoại: mở hub, tab
-**Live** → **Alerts on this device** → **Turn on alerts** (iPhone: trước đó Share → Add to Home Screen và mở từ
-biểu tượng đó). Một thông báo thử sẽ tới ngay.
+quá 3 phút, bị dừng, có lệnh mở mà không có stop trên sàn, hoặc log có lỗi. Nhận trên điện thoại: mở app, màn
+**Cảnh báo** → **Bật thông báo** (iPhone: trước đó Chia sẻ → Thêm vào MH chính và mở từ biểu tượng đó). Một thông
+báo thử sẽ tới ngay.
 
 Tuỳ chọn thêm Telegram (thông báo từng lệnh + cùng các cảnh báo trên): tạo bot với @BotFather lấy token, nhắn cho
 bot một tin rồi lấy chat id (ví dụ qua @userinfobot), sau đó:
@@ -51,8 +51,8 @@ docker compose up -d
 ```
 Mở trên chính máy đó:
 - http://localhost:8080 — FreqUI, đăng nhập `ft-live` / mật khẩu ở bước 3
-- http://localhost:8090 — hub (app backtest + tab Live + `/tune/`), đăng nhập `admin` / mật khẩu ở bước 3.
-  Lần đầu hub tải nến BTC 1m/5m/15m từ 2021 về máy (~15–20 phút, chạy nền), sau đó tự cập nhật mỗi 2 phút.
+- http://localhost:8090 — hub (app điều khiển bot), đăng nhập `admin` / mật khẩu ở bước 3.
+  Hub tự tải nến 4h + 15m của 5 coin cho backtest (LAB) lúc khởi động và mỗi ngày (màn **Dữ liệu** cho biết tới ngày nào).
 
 Bot tự khởi động lại khi máy khởi động lại (miễn là Docker tự chạy). **Tắt chế độ ngủ (sleep) của máy.**
 
@@ -63,8 +63,8 @@ Bot tự khởi động lại khi máy khởi động lại (miễn là Docker t
    sudo tailscale serve --bg --https=443  http://127.0.0.1:8090
    sudo tailscale serve --bg --https=8443 http://127.0.0.1:8080    # FreqUI, nếu cần
    ```
-3. Trên PC hoặc iPhone (bật Tailscale): mở `https://<tên-máy>.<tailnet>.ts.net` → app backtest, tab **Live**,
-   `/tune/`. **Không phải nhập mật khẩu**: Tailscale đã xác thực bạn (hub đọc header `Tailscale-User-Login`;
+3. Trên PC hoặc iPhone (bật Tailscale): mở `https://<tên-máy>.<tailnet>.ts.net` → app điều khiển bot.
+   **Không phải nhập mật khẩu**: Tailscale đã xác thực bạn (hub đọc header `Tailscale-User-Login`;
    muốn giới hạn tài khoản thì điền `allowed_logins` trong `hub.json`). Trên iPhone: Safari → Chia sẻ →
    **Thêm vào MH chính** để dùng như app. Tên máy xem bằng `tailscale status`.
    Chỉ thiết bị trong tailnet của bạn mở được, không lộ ra internet.
@@ -161,7 +161,7 @@ Nâng cấp freqtrade: đổi tag `image:` trong `docker-compose.yml`, chạy tr
 
 ## Khác gì so với backtest
 - Vào/ra lệnh bằng **lệnh market** ngay khi nến tín hiệu đóng (backtest vào ở giá mở nến sau — gần như nhau).
-- Phí thật là **phí taker 0.05%/chiều** (app backtest đã mặc định mức này). Trượt giá khi stop khớp không có trong
+- Phí thật là **phí taker 0.05%/chiều** (backtest LAB tính 0.08%/chiều gồm cả trượt giá). Trượt giá khi stop khớp không có trong
   backtest: ước tính làm lãi giảm thêm ~15–25% (xem README gốc, mục "Backtest so với live"). Funding tính theo mức thật.
 - Chiến lược trung bình ~6–7 lệnh/tháng: chạy ít nhất 1–2 tháng rồi hẵng đánh giá. Nên so từng lệnh với
   backtest cùng khoảng thời gian (giá vào, SL, lúc kích hoạt trailing) hơn là chỉ nhìn lãi/lỗ.

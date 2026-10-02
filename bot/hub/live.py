@@ -21,7 +21,7 @@ HALT_LOG = "DỪNG VÀO LỆNH MỚI"          # dòng log ERROR của chiến l
 
 
 def has_stop(t: dict) -> bool:
-    """Lệnh có stop nằm trên sàn không (tab Live và watchdog dùng chung một cách đánh giá)."""
+    """Lệnh có stop nằm trên sàn không (màn Tổng quan và watchdog dùng chung một cách đánh giá)."""
     return bool(t.get("stoploss_order_id")) or any(
         o.get("ft_order_side") == "stoploss" and o.get("status") in ("open", "new") for o in t.get("orders") or [])
 

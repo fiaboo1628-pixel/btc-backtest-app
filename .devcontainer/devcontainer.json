@@ -14,7 +14,7 @@
   "forwardPorts": [8080, 8090],
   "portsAttributes": {
     "8080": { "label": "FreqUI (bot)", "onAutoForward": "openBrowserOnce" },
-    "8090": { "label": "Hub (app + Live)", "onAutoForward": "notify" }
+    "8090": { "label": "Hub (app điều khiển bot)", "onAutoForward": "notify" }
   },
   "customizations": {
     "codespaces": { "openFiles": ["bot/deploy/BOT_LOGIN.md"] }

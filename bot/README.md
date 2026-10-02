@@ -5,8 +5,7 @@ BTC ETH SOL XRP DOGE, vào khi đóng cửa vượt đỉnh/đáy 20 nến (lọ
 rủi ro 0.25%/lệnh, đòn bẩy cố định x5, tự dừng khi sụt vốn > 15%. Backtest 04/2020 → 09/2026 (chi tiết 15m, vốn 1000):
 1470 lệnh, PF 1.55, 20.5%/năm, max DD 11% — lạc quan vì 5 coin chọn sau khi thấy kết quả (10 coin: PF 1.33, DD 23%).
 Kiểm tra độ bền: [`research/robustness_trend_2026-10.md`](research/robustness_trend_2026-10.md). Vốn từ 1000 USDT là đủ.
-Tự backtest: trang Chỉnh tham số `/tune/` của hub (LAB, phí + trượt 0.08%/chiều). Nút "Send to bot" của app chỉ hợp
-với DonchianRevert — với TrendBreakout hub từ chối (tham số không tồn tại), không đổi gì.
+Tự backtest và đổi tham số: màn **Backtest** của app trên hub (freqtrade ở LAB, phí + trượt 0.08%/chiều, khớp lệnh 15m).
 
 DonchianRevert (bên dưới) đã ngưng: walk-forward thất bại ([`research/robustness_2026-10.md`](research/robustness_2026-10.md)).
 Lịch sử lệnh cũ: `user_data/demo-donchian.sqlite`, `user_data/paper-donchian.sqlite`.
@@ -64,8 +63,8 @@ TP cố định 1:4 không trailing +55%, DD 22%, 2 năm lỗ · 1:5 +121% nhưn
 
 ## Hub (thư mục `hub/`)
 Tất cả ngưỡng của chiến lược là tham số freqtrade (mặc định trong code, ghi đè bằng `DonchianRevert.json`).
-`hub/` là server một cổng trên máy nhà: app backtest + nến trên máy chủ, tab Live, nút "Send to bot" và trang
-Chỉnh tham số (`/tune/`). Xem `hub/README.md`.
+`hub/` là server một cổng trên máy nhà phục vụ app điều khiển bot (Tổng quan, Lệnh, Backtest, Dữ liệu, Cảnh báo).
+Xem `hub/README.md`.
 
 ## Chạy lại backtest offline
 ```bash
