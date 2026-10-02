@@ -67,7 +67,7 @@ function paint() {
       <tr><td>Trades / month</td><td>${pm == null ? "–" : fmt(pm, 1)}</td><td>~${fmt(ex.per_month, 0)}</td></tr>
       <tr><td>Win rate</td><td>${data.stats.win_pct != null ? pct(data.stats.win_pct, 0) : "–"}</td><td>${pct(ex.win_pct, 0)}</td></tr>
       <tr><td>Profit factor</td><td>${data.stats.pf == null ? "–" : fmt(data.stats.pf, 2)}</td><td>${fmt(ex.pf, 2)}</td></tr>
-      <tr><td>Max drawdown</td><td>${pct(data.stats.dd_pct, 1)}</td><td>${ex.dd_pct ? `~${fmt(ex.dd_pct, 0)}%` : "–"}${halt ? `<br><span class="hint">tự dừng khi quá ${fmt(halt, 0)}%</span>` : ""}</td></tr>
+      <tr><td>Max drawdown</td><td>${pct(data.stats.dd_pct, 1)}</td><td>${ex.dd_pct ? `~${fmt(ex.dd_pct, 0)}%` : "–"}${halt ? `<br><span class="hint">½ khi quá ${fmt(ctx.store.live.halt.reduce_pct ?? 20, 0)}%, dừng khi quá ${fmt(halt, 0)}%</span>` : ""}</td></tr>
     </tbody></table></div>
     <p class="hint">${esc(data.verdict || "")}${enough ? "" : ` — kết luận chỉ có nghĩa từ ${data.min_trades || 30} lệnh trở lên.`}</p>`;
 

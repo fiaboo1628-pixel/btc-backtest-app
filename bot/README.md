@@ -2,7 +2,7 @@
 
 **Từ 10/2026 bot chạy TrendBreakout** (`user_data/strategies/TrendBreakout.py`): breakout kênh Donchian 4h, 5 coin
 BTC ETH SOL XRP DOGE, vào khi đóng cửa vượt đỉnh/đáy 20 nến (lọc EMA200), thoát khi thủng kênh 10 nến, SL 2×ATR,
-rủi ro 0.25%/lệnh, đòn bẩy cố định x5, tự dừng khi sụt vốn > 25% (live 02/10/2026: SL 3×ATR, rủi ro 1%). Backtest 04/2020 → 09/2026 (chi tiết 15m, vốn 1000):
+rủi ro 0.25%/lệnh, đòn bẩy cố định x5, sụt vốn > 20% giảm nửa khối lượng, > 30% tự dừng (live 02/10/2026: SL 3×ATR, rủi ro 1%). Backtest 04/2020 → 09/2026 (chi tiết 15m, vốn 1000):
 1470 lệnh, PF 1.55, 20.5%/năm, max DD 11% — lạc quan vì 5 coin chọn sau khi thấy kết quả (10 coin: PF 1.33, DD 23%).
 Kiểm tra độ bền: [`research/robustness_trend_2026-10.md`](research/robustness_trend_2026-10.md). Vốn từ 1000 USDT là đủ.
 Tự backtest và đổi tham số: màn **Backtest** của app trên hub (freqtrade ở LAB, phí + trượt 0.08%/chiều, khớp lệnh 15m).

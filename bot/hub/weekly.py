@@ -60,7 +60,7 @@ def verdict(s: dict) -> str:
         return "đúng kỳ vọng backtest"
     if s["pf"] >= 1:
         return "lãi nhưng yếu hơn backtest"
-    return "đang thua — sụt vốn quá 25% thì bot tự dừng"
+    return "đang thua — sụt vốn quá 20% thì giảm nửa khối lượng, quá 30% thì bot tự dừng"
 
 
 def _line(name: str, s: dict) -> str:

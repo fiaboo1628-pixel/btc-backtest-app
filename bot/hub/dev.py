@@ -144,7 +144,7 @@ class FakeBots:
                     ["d", now - 2 * 3600_000, "freqtrade.exchange", "WARNING", "Binance trả lời chậm (1.9 s)"]]
             if self.sc == "halted":
                 rows.append(["d", now - 600_000, "TrendBreakout", "ERROR",
-                             "DỪNG VÀO LỆNH MỚI: sụt vốn 28.0% > 25% — bỏ tín hiệu ETH/USDT:USDT long. Xem lại rồi tắt halt_on để chạy tiếp."])
+                             "DỪNG VÀO LỆNH MỚI: sụt vốn 31.0% > 30% — bỏ tín hiệu ETH/USDT:USDT long. Xem lại rồi tắt halt_on để chạy tiếp."])
             return {"logs": rows}
         if path == "/health":
             return {"last_process_ts": time.time() - 4}
