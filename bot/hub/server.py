@@ -1,12 +1,13 @@
 """
 Hub: một cổng duy nhất trên máy chủ nhà cho cả hệ thống, mở qua Tailscale (PC ở nhà, điện thoại khi ra ngoài).
 
-    /            app backtest (cùng mã với bản Vercel), thêm tab Live + nút "Gửi sang bot" khi chạy trên hub
-    /tune/       trang Chỉnh tham số: backtest bằng freqtrade (LAB) và áp dụng cho bot (LIVE)
-    /api/hub     hub có những gì (app dùng để bật tab Live, nguồn dữ liệu máy chủ...)
-    /api/data    nến trên máy chủ, tự cập nhật (candles.py)
-    /api/live    trạng thái bot (live.py)
-    /api/tune/*  chỉnh tham số (tune.py)
+    /            app điều khiển bot (index.html, js/, css/, icons/ ở gốc repo): Tổng quan, Lệnh, Backtest, Dữ liệu, Cảnh báo
+    /tune/       địa chỉ cũ của trang Chỉnh tham số → chuyển về màn Backtest của app
+    /api/hub     hub có những gì (app dựa vào đây để bật/tắt từng màn)
+    /api/data    nến trên máy chủ, tự cập nhật (candles.py) — app hiện không dùng, giữ cho công cụ khác
+    /api/live    trạng thái bot, /api/trades lịch sử lệnh (live.py)
+    /api/tune/*  backtest ở LAB + áp dụng tham số cho bot (tune.py)
+    /api/alerts  kênh cảnh báo + cảnh báo gần đây (alerts.py), /api/weekly báo cáo tuần (weekly.py), /api/push/* (push.py)
 
 Đăng nhập: qua `tailscale serve` thì Tailscale đã xác thực người dùng (header Tailscale-User-Login),
 không phải gõ mật khẩu; truy cập kiểu khác (localhost, SSH tunnel) thì hỏi mật khẩu trong hub.json.
@@ -27,7 +28,7 @@ import sys
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 
@@ -46,7 +47,7 @@ log = logging.getLogger("hub")
 
 # Chỉ phục vụ đúng các file của app — thư mục gốc repo còn chứa bot/ (có secrets), không được lộ ra.
 APP_FILES = {"index.html", "sw.js", "manifest.webmanifest"}
-APP_DIRS = {"css", "js", "icons", "vendor", "presets"}
+APP_DIRS = {"css", "js", "icons"}
 
 
 def load_cfg(path: Path) -> dict:
@@ -131,6 +132,7 @@ def create_app(cfg: dict) -> FastAPI:
     app_dir = Path(cfg.get("app_dir", HERE.parent.parent)).resolve()
     features = {"data": False, "live": False, "tune": False}
     store = watchdog = report = notify = updater = None
+    history = alerts.History(None)                               # thay bằng bản ghi file khi có phần live
     # config của bot (cặp, khung nến) cho LAB: mặc định cạnh file chế độ (/deploy/.env → /deploy/config.base.json)
     cfg.setdefault("bot_config", str(Path(cfg.get("mode_file", "/deploy/.env")).parent / "config.base.json"))
     proxies = tailscale_proxies(h)
@@ -178,9 +180,11 @@ def create_app(cfg: dict) -> FastAPI:
         data_dir = Path(cfg["data"].get("dir", HERE / "data")) if "data" in cfg else HERE / "data"
         pusher = push.Push(Path(cfg.get("push_file", data_dir / "push.json")))
         app.include_router(pusher.router())
+        history = alerts.History(Path(cfg.get("alerts_file", data_dir / "alerts.json")))
 
         async def send(msg: str) -> None:
-            """Thành công khi ít nhất một kênh nhận; không kênh nào nhận thì báo lỗi để watchdog gửi lại sau."""
+            """Thành công khi ít nhất một kênh nhận; không kênh nào nhận thì báo lỗi để watchdog gửi lại sau.
+            Mọi tin đi qua đây đều ghi vào lịch sử cho màn Cảnh báo của app."""
             sent = False
             if tg:
                 try:
@@ -189,9 +193,11 @@ def create_app(cfg: dict) -> FastAPI:
                 except Exception as e:  # noqa: BLE001
                     log.warning("Telegram lỗi: %s", type(e).__name__)   # không log chi tiết: URL có token
             if pusher.subs:
-                sent = await pusher.send("Bot alert", msg) > 0 or sent
+                sent = await pusher.send("Cảnh báo bot", msg) > 0 or sent
             if (tg or pusher.subs) and not sent:
+                history.add(msg, ok=False)
                 raise RuntimeError("không kênh nào nhận cảnh báo")
+            history.add(msg, ok=bool(tg or pusher.subs))
 
         has_channel = lambda: bool(tg or pusher.subs)  # noqa: E731
         notify = send
@@ -205,6 +211,13 @@ def create_app(cfg: dict) -> FastAPI:
         @app.get("/api/weekly")
         async def weekly_report():
             return await weekly.build(ft_live, ft_paper)
+
+        @app.get("/api/alerts")
+        async def alerts_info():
+            """Kênh cảnh báo đang có, sự cố đang báo, và các cảnh báo gần đây (mới nhất trước)."""
+            return {"channels": {"telegram": bool(tg), "devices": len(pusher.subs)},
+                    "active": list(watchdog.active.values()) if watchdog else [],
+                    "recent": history.items}
     if "lab" in cfg and "live" in cfg:
         if cfg.get("lab_data_update", True):
             ft_lab = tune.FtClient(cfg["lab"])
@@ -226,14 +239,10 @@ def create_app(cfg: dict) -> FastAPI:
                 "datasets": [d.info() for d in store.sets.values()] if store else []}
 
     @app.get("/tune")
-    async def tune_redirect():
-        return RedirectResponse("/tune/")
-
     @app.get("/tune/")
-    async def tune_page():
-        if not features["tune"]:
-            raise HTTPException(404, "Chỉnh tham số chưa bật (thiếu LAB/LIVE)")
-        return FileResponse(HERE / "static" / "tune.html")
+    async def tune_redirect():
+        """Địa chỉ cũ của trang Chỉnh tham số: giờ là màn Backtest trong app."""
+        return RedirectResponse("/#backtest")
 
     @app.get("/")
     async def index():

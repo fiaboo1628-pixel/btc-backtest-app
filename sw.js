@@ -1,36 +1,37 @@
-// Service worker: lưu sẵn file của app để mở được khi không có mạng. Dữ liệu nến nằm trong IndexedDB.
-const CACHE = "backtest-v16";
-const FILES = [
-  "./", "index.html", "css/app.css", "manifest.webmanifest", "icons/icon.svg",
-  "js/app.js", "js/data.js", "js/catalog.js", "js/rules.js", "js/engine.js", "js/indicators.js",
-  "js/timeframes.js", "js/worker.js", "js/replay.js", "js/live.js", "js/botparams.js", "js/portfolio.js", "vendor/lightweight-charts.js",
-  "presets/index.json", "presets/donchian_revert.json", "presets/trend_breakout.json", "presets/bb_revert.json", "presets/trend_1h_filter.json",
-  "presets/msb_ob_retest.json",
+// Service worker: lưu sẵn vỏ app (HTML, CSS, JS, icon) để mở nhanh và mở được khi mất mạng.
+// Dữ liệu (/api/...) KHÔNG bao giờ cache — luôn lấy mới từ hub. Đổi CACHE mỗi lần phát hành (cùng js/version.js).
+const CACHE = "bot-app-2026.10.02";
+const SHELL = [
+  "./", "index.html", "manifest.webmanifest", "css/app.css", "icons/icon.svg", "icons/icon-192.png",
+  "js/app.js", "js/api.js", "js/format.js", "js/model.js", "js/ui.js", "js/chart.js", "js/version.js",
+  "js/views/overview.js", "js/views/trades.js", "js/views/backtest.js", "js/views/data.js", "js/views/alerts.js",
 ];
-self.addEventListener("install", (e) => e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting())));
+
+self.addEventListener("install", (e) => e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())));
 self.addEventListener("activate", (e) => e.waitUntil(
   caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())));
+
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
-  if (url.origin !== location.origin || e.request.method !== "GET") return; // API Binance đi thẳng
-  if (url.pathname.startsWith("/api/")) return;                               // proxy nến: không lưu (đã có IndexedDB)
-  // mạng trước (luôn lấy bản mới), mất mạng thì dùng bản đã lưu
+  if (url.origin !== location.origin || e.request.method !== "GET") return;
+  if (url.pathname.startsWith("/api/")) return;                              // dữ liệu: đi thẳng, không cache
+  // vỏ app: mạng trước (có bản mới thì dùng ngay), mất mạng thì lấy bản đã lưu
   e.respondWith(fetch(e.request).then((r) => {
     if (r.ok) { const copy = r.clone(); caches.open(CACHE).then((c) => c.put(e.request, copy)); }
     return r;
-  }).catch(() => caches.match(e.request).then((m) => m || Response.error())));
+  }).catch(() => caches.match(e.request, { ignoreSearch: true }).then((m) => m || caches.match("index.html"))));
 });
 
-// Cảnh báo bot từ hub (bot/hub/push.py): hiện thông báo, bấm vào thì mở app.
+// Cảnh báo từ hub (bot/hub/push.py): hiện thông báo; bấm vào thì mở app.
 self.addEventListener("push", (e) => {
-  let m = { title: "Bot alert", body: "" };
+  let m = { title: "Cảnh báo bot", body: "" };
   try { m = { ...m, ...e.data.json() }; } catch { m.body = e.data?.text() || ""; }
-  e.waitUntil(self.registration.showNotification(m.title, { body: m.body, icon: "icons/icon.svg", tag: m.body.slice(0, 60) }));
+  e.waitUntil(self.registration.showNotification(m.title, { body: m.body, icon: "icons/icon-192.png", tag: m.body.slice(0, 60) }));
 });
 self.addEventListener("notificationclick", (e) => {
   e.notification.close();
   e.waitUntil(self.clients.matchAll({ type: "window" }).then((ws) => {
     const w = ws.find((c) => new URL(c.url).origin === location.origin);
-    return w ? w.focus() : self.clients.openWindow("./");
+    return w ? w.focus() : self.clients.openWindow("./#alerts");
   }));
 });

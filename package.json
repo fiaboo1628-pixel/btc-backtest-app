@@ -3,9 +3,5 @@
   "private": true,
   "scripts": {
     "test": "node --test tests/*.test.mjs"
-  },
-  "dependencies": {
-    "@vercel/analytics": "^1.4.1",
-    "@vercel/speed-insights": "^2.0.0"
   }
 }

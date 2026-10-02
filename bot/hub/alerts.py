@@ -11,8 +11,11 @@ Telegram (tuỳ chọn): hub.json "alerts": {"telegram_token": "...", "chat_id":
 Chưa có kênh nào thì vẫn canh và ghi log, nhưng không gửi được đi đâu (tab Live báo thiếu cảnh báo).
 """
 import asyncio
+import json
 import logging
+import os
 import time
+from pathlib import Path
 from typing import Awaitable, Callable
 
 import httpx
@@ -26,6 +29,36 @@ EVERY_S = 60
 STALE_S = 180                   # bot xử lý mỗi ~5 s; quá 3 phút là kẹt
 DOWN_AFTER = 3                  # 3 lần hỏi hỏng liền (~3 phút) mới báo, tránh báo nhầm lúc bot restart
 OUTBOX_MAX = 50                 # tin chưa gửi được (mạng/Telegram lỗi) giữ lại gửi lại vòng sau
+HISTORY_MAX = 100               # cảnh báo gần đây giữ lại cho màn "Cảnh báo" của app (GET /api/alerts)
+
+
+class History:
+    """Những cảnh báo hub đã gửi đi (watchdog, tải nến, báo cáo tuần), mới nhất trước; ghi file để còn sau khi hub
+    khởi động lại. Không chứa gì nhạy cảm: chỉ nội dung tin và giờ gửi."""
+
+    def __init__(self, path: Path | None, keep: int = HISTORY_MAX, now: Callable[[], float] = time.time):
+        self.path, self.keep, self.now = path, keep, now
+        self.items: list[dict] = []
+        if path:
+            try:
+                self.items = json.loads(path.read_text(encoding="utf-8"))[:keep]
+            except (OSError, ValueError):
+                self.items = []
+
+    def add(self, msg: str, ok: bool = True) -> None:
+        self.items.insert(0, {"t": round(self.now()), "msg": msg[:500], "ok": ok})
+        del self.items[self.keep:]
+        if not self.path:
+            return
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self.path.with_suffix(".tmp")
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(self.items, f, ensure_ascii=False)
+            tmp.replace(self.path)
+        except OSError as e:
+            log.warning("Không ghi được %s: %s", self.path, e)
 
 
 def telegram_sender(token: str, chat_id: str) -> Callable[[str], Awaitable[None]]:

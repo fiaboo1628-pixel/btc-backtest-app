@@ -1,6 +1,6 @@
 """
-Thông báo đẩy (Web Push) tới điện thoại đã bật "Alerts on this phone" trong tab Live — kênh cảnh báo không cần
-Telegram. iPhone: mở hub từ biểu tượng trên màn hình chính (Share → Add to Home Screen) mới nhận được.
+Thông báo đẩy (Web Push) tới điện thoại đã bật "Thông báo trên máy này" ở màn Cảnh báo của app — kênh cảnh báo
+không cần Telegram. iPhone: mở hub từ biểu tượng trên màn hình chính (Share → Add to Home Screen) mới nhận được.
 
 Mã hoá theo RFC 8291 (aes128gcm) + xác thực VAPID (RFC 8292), chỉ dùng thư viện `cryptography`.
 Khoá VAPID và danh sách máy đăng ký nằm trong một file JSON (mặc định <data dir>/push.json), hub tự tạo lần đầu.
@@ -172,7 +172,7 @@ class Push:
 
         @r.post("/api/push/test")
         async def test():
-            n = await self.send("Bot alerts", "Test: alerts from the home server reach this phone.")
+            n = await self.send("Cảnh báo bot", "Gửi thử: cảnh báo từ máy chủ nhà đã tới máy này.")
             return {"sent": n, "devices": len(self.subs)}
 
         return r
