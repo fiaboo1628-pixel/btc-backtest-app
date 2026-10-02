@@ -81,9 +81,10 @@ def test_static_whitelist(tmp_path):
     c = make_app(tmp_path)
     assert c.get("/", headers=TS).status_code == 200
     assert c.get("/js/app.js", headers=TS).status_code == 200
-    assert c.get("/presets/index.json", headers=TS).status_code == 200
+    assert c.get("/css/app.css", headers=TS).status_code == 200
+    assert c.get("/icons/icon.svg", headers=TS).status_code == 200
     for bad in ("/bot/deploy/setup.py", "/README.md", "/.git/config", "/js/../bot/deploy/setup.py",
-                "/js/%2e%2e/bot/deploy/setup.py", "/api/../bot/deploy/setup.py", "/vercel.json"):
+                "/js/%2e%2e/bot/deploy/setup.py", "/api/../bot/deploy/setup.py", "/package.json", "/docs/x.png"):
         assert c.get(bad, headers=TS).status_code == 404, bad
 
 
@@ -91,7 +92,10 @@ def test_features_without_bot(tmp_path):
     c = make_app(tmp_path)
     f = c.get("/api/hub", headers=TS).json()["features"]
     assert f == {"data": True, "live": False, "tune": False}
-    assert c.get("/tune/", headers=TS).status_code == 404
+    r = c.get("/tune/", headers=TS, follow_redirects=False)                 # địa chỉ cũ → màn Backtest của app
+    assert r.status_code == 307 and r.headers["location"] == "/#backtest"
+    assert c.get("/tune", headers=TS, follow_redirects=False).status_code == 307
+    assert c.get("/api/live", headers=TS).status_code in (404, 405)        # chưa cấu hình bot thì không có
 
 
 def test_dataset_read(tmp_path):
@@ -187,7 +191,46 @@ def test_live_summary(tmp_path, monkeypatch):
     assert j["open"][0]["stop_on_exchange"] is True and "orders" not in j["open"][0]
     assert [t["trade_id"] for t in j["closed"]] == [2, 1]
     assert j["logs"] == [{"t": 2, "level": "WARNING", "msg": "careful"}]
+    assert j["equity"] == [[1, 1000], [2, 1000]] and j["halt"]["halted"] is False
     assert "SECRET" not in json.dumps(j)
+    t = c.get("/api/trades", headers=TS).json()
+    assert t["reachable"] and [x["trade_id"] for x in t["trades"]] == [2, 1] and t["stats"]["n"] == 2
+    assert t["expect"]["pf"] > 1 and "chưa đủ" in t["verdict"] and t["starting"] == 1000
+    a = c.get("/api/alerts", headers=TS).json()
+    assert a == {"channels": {"telegram": False, "devices": 0}, "active": [], "recent": []}
+
+
+def test_live_halt_and_equity(tmp_path):
+    """Sụt vốn tính như TrendBreakout.halt_reason; dừng khi quá 15% (halt_on bật) hoặc log đã báo dừng."""
+    import live
+    tr = lambda ts, p: {"close_timestamp": ts, "profit_abs": p}  # noqa: E731
+    closed = [tr(3, -100), tr(1, 50), tr(2, -120)]                    # thứ tự đóng: +50, -120, -100
+    assert live.equity_curve(1000, closed) == [[1, 1050], [2, 930], [3, 830]]
+    dd = live.drawdown(1000, [50, -120, -100])
+    assert dd == {"current_pct": round(100 * (1 - 830 / 1050), 2), "max_pct": round(100 * (1 - 830 / 1050), 2)}
+    assert live.drawdown(0, []) == {"current_pct": 0.0, "max_pct": 0.0}
+    h = live.halt_view(1000, closed, True, [])
+    assert h["halted"] is True and h["max_dd_pct"] > 15 and h["threshold_pct"] == 15
+    assert live.halt_view(1000, closed, False, [])["halted"] is False          # người dùng đã tắt halt_on
+    assert live.halt_view(1000, [tr(1, -50)], True, [])["halted"] is False
+    assert live.halt_view(1000, [], True, [{"msg": "DỪNG VÀO LỆNH MỚI: sụt vốn 16% > 15%"}])["halted"] is True
+    assert live.halt_view(1000, [], None, [])["halt_on"] is None
+    # halt_on đọc từ file tham số LIVE (trang Backtest ghi), không có file = mặc định bật
+    assert live.halt_on_param(tmp_path, "TrendBreakout") is True
+    (tmp_path / "TrendBreakout.json").write_text(json.dumps({"params": {"sell": {"halt_on": False}}}))
+    assert live.halt_on_param(tmp_path, "TrendBreakout") is False
+    assert live.halt_on_param(None, "TrendBreakout") is None
+
+
+def test_alert_history_persists(tmp_path):
+    import alerts
+    now = [100.0]
+    h = alerts.History(tmp_path / "a" / "alerts.json", keep=2, now=lambda: now[0])
+    h.add("⚠️ một"); now[0] = 200; h.add("✅ Hết: một", ok=False); now[0] = 300; h.add("⚠️ hai")
+    assert [x["msg"] for x in h.items] == ["⚠️ hai", "✅ Hết: một"] and h.items[1]["ok"] is False
+    assert alerts.History(tmp_path / "a" / "alerts.json").items == h.items     # còn sau khi hub khởi động lại
+    assert (tmp_path / "a" / "alerts.json").stat().st_mode & 0o777 == 0o600
+    assert alerts.History(None).items == [] and alerts.History(tmp_path / "x.json").items == []
 
 
 def test_live_mode_from_running_bot(tmp_path):
