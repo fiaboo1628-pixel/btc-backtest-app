@@ -31,6 +31,8 @@ def fake_reload(self, force=False, *, load_leverage_tiers=True):
 Exchange.reload_markets = fake_reload
 Exchange.validate_timeframes = lambda self, tf: None
 Exchange.fill_leverage_tiers = lambda self: None
-from freqtrade.main import main  # noqa: E402
 
-sys.exit(main(sys.argv[1:]))
+if __name__ == "__main__":                  # import được (tools/export_parity_trend.py lấy PREC) mà không chạy freqtrade
+    from freqtrade.main import main
+
+    sys.exit(main(sys.argv[1:]))
