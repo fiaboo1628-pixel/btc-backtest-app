@@ -17,7 +17,7 @@ Nhãn, tiêu đề, nút dùng tiếng Anh ngắn gọn; giải thích, thông b
 | **Trades** | Mọi lệnh đã đóng, lọc theo coin; số lệnh, thắng, profit factor; so với kỳ vọng nghiên cứu (~19 lệnh/tháng, thắng 32%, PF 1,55) | `/api/trades` |
 | **Backtest** | Chỉnh tham số chiến lược (nhãn ngắn + giải thích tiếng Việt, giới hạn từ chính class chiến lược), chọn khoảng thời gian và vốn thử, chạy backtest **bằng freqtrade ở LAB** (khớp lệnh theo nến 15m), kết quả tóm tắt + theo năm + theo coin + đường vốn, lịch sử các lần thử, **Apply to bot** với hộp xác nhận ghi rõ giá trị cũ → mới và tài khoản nào | `/api/tune/*` |
 | **Data** | Nến LAB có coin nào, khung nào, từ ngày nào tới ngày nào, hub tự cập nhật lúc nào, đang tải không, lỗi gì | `/api/tune/live` |
-| **Alerts** | Công tắc thông báo đẩy tới máy này (nút gửi thử), kênh đang có (điện thoại, Telegram), sự cố đang báo, cảnh báo gần đây, báo cáo tuần; cuối trang: phiên bản, tải lại app | `/api/push/*`, `/api/alerts`, `/api/weekly` |
+| **Alerts** | Kênh đang có (điện thoại, Telegram), sự cố đang báo, cảnh báo gần đây, báo cáo tuần; cuối trang: phiên bản, tải lại app | `/api/alerts`, `/api/weekly` |
 
 Không có backtest chạy trong trình duyệt: số duy nhất đáng tin là freqtrade ở LAB (app cũ có bộ máy JS riêng, lệch freqtrade ở SOL/DOGE vì bảng bước khối lượng — đã bỏ).
 
@@ -33,7 +33,7 @@ Không có backtest chạy trong trình duyệt: số duy nhất đáng tin là 
 
 ### Dùng trên iPhone
 Mở `https://<tên-máy>.<tailnet>.ts.net` trong Safari (bật Tailscale) → Chia sẻ → **Thêm vào MH chính** → mở từ biểu tượng đó.
-Thông báo đẩy chỉ nhận được khi mở app từ màn hình chính. Vỏ app được lưu sẵn (mở nhanh, mở được khi mất mạng — có báo "số liệu cũ"); dữ liệu luôn lấy mới từ hub.
+Bật/tắt thông báo đẩy trên máy này: nút chuông ở thanh tiêu đề (bật xong có một thông báo thử). Thông báo đẩy chỉ nhận được khi mở app từ màn hình chính. Vỏ app được lưu sẵn (mở nhanh, mở được khi mất mạng — có báo "số liệu cũ"); dữ liệu luôn lấy mới từ hub.
 
 ## Cấu trúc
 

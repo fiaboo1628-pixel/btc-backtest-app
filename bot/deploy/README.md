@@ -35,7 +35,7 @@ File mật khẩu/key (`secrets/`, `hub.json`) có quyền 600; setup đặt l�
 
 **Cảnh báo (bắt buộc trước tiền thật)**: hub canh bot mỗi phút — báo khi bot không trả lời, không xử lý nến
 quá 3 phút, bị dừng, có lệnh mở mà không có stop trên sàn, hoặc log có lỗi. Nhận trên điện thoại: mở app, màn
-**Cảnh báo** → **Bật thông báo** (iPhone: trước đó Chia sẻ → Thêm vào MH chính và mở từ biểu tượng đó). Một thông
+bấm **nút chuông** ở thanh tiêu đề (iPhone: trước đó Chia sẻ → Thêm vào MH chính và mở từ biểu tượng đó). Một thông
 báo thử sẽ tới ngay.
 
 Tuỳ chọn thêm Telegram (thông báo từng lệnh + cùng các cảnh báo trên): tạo bot với @BotFather lấy token, nhắn cho

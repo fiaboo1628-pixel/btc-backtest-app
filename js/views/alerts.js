@@ -1,46 +1,27 @@
-// Màn Alerts: thông báo đẩy tới máy này (push.py) dưới dạng hàng công tắc gọn, kênh hiện có, sự cố đang báo,
-// cảnh báo gần đây (/api/alerts), báo cáo tuần (/api/weekly). Cuối trang: thông tin app (phiên bản, tải lại).
-// Phản hồi thao tác (bật/tắt/gửi thử) hiện bằng toast, không chiếm chỗ trong thẻ.
+// Màn Alerts: kênh cảnh báo hiện có, sự cố đang báo, cảnh báo gần đây (/api/alerts), báo cáo tuần (/api/weekly).
+// Cuối trang: thông tin app (phiên bản, tải lại). Bật/tắt thông báo trên máy này: nút chuông ở thanh tiêu đề (push.js).
 import { ago, dateTime, fmt, pct, signedPct } from "../format.js";
-import { ICONS, card, errorBox, esc, ibtn, loading, note, toast } from "../ui.js";
+import { ICONS, card, errorBox, esc, ibtn, loading, toast } from "../ui.js";
 import { APP_VERSION } from "../version.js";
 
 export const title = "Alerts";
 
 let root = null, ctx = null;
-const push = { sub: null, checked: false, busy: false };
 let info = null, infoErr = null, weekly = null, weeklyErr = null, weeklyLoading = false;
-
-const canPush = typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
-const ios = typeof navigator !== "undefined" && /iPhone|iPad/.test(navigator.userAgent);
-const standalone = typeof matchMedia !== "undefined" && (matchMedia("(display-mode: standalone)").matches || navigator.standalone);
-const b64 = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
 
 export function mount(el, c) {
   root = el; ctx = c;
   root.addEventListener("click", onClick);
-  root.addEventListener("change", onChange);
   root.innerHTML = `<div class="cards">${card("", loading())}</div>`;
   load();
 }
-export function unmount() { root?.removeEventListener("click", onClick); root?.removeEventListener("change", onChange); root = null; }
+export function unmount() { root?.removeEventListener("click", onClick); root = null; }
 export function refresh() { load(); }
 
 async function load() {
   if (!ctx.store.hub?.features?.live) { info = null; infoErr = null; paint(); return; }
   try { info = await ctx.api("/api/alerts"); infoErr = null; } catch (e) { infoErr = e; }
   paint();
-  checkPush();
-}
-
-let swFailed = false;
-async function checkPush() {
-  if (!canPush || push.checked) return;
-  try {
-    const reg = await Promise.race([navigator.serviceWorker.ready, new Promise((_, no) => setTimeout(() => no(new Error("sw")), 5000))]);
-    push.sub = await reg.pushManager.getSubscription();
-  } catch { push.sub = null; swFailed = true; }
-  push.checked = true; paint();
 }
 
 async function loadWeekly() {
@@ -49,15 +30,10 @@ async function loadWeekly() {
   weeklyLoading = false; paint();
 }
 
-function onChange(e) {
-  const t = e.target;
-  if (t.id === "pushToggle" && !push.busy) pushAction(t.checked ? "on" : "off");
-}
 function onClick(e) {
   const b = e.target.closest("button");
   if (!b) return;
-  if (b.dataset.push && !push.busy) pushAction(b.dataset.push);
-  else if (b.dataset.act === "weekly") loadWeekly();
+  if (b.dataset.act === "weekly") loadWeekly();
   else if (b.dataset.act === "reload") reloadApp();
 }
 
@@ -70,52 +46,10 @@ async function reloadApp() {
   location.reload();
 }
 
-async function pushAction(what) {
-  push.busy = true; paint();
-  try {
-    const reg = await navigator.serviceWorker.ready;
-    if (what === "on") {
-      if (await Notification.requestPermission() !== "granted") throw new Error("Thông báo đang bị chặn cho app này trong Cài đặt của máy.");
-      const { key } = await ctx.api("/api/push/key");
-      push.sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(key) });
-      await ctx.api("/api/push/subscribe", { method: "POST", body: push.sub.toJSON() });
-      const t = await ctx.api("/api/push/test", { method: "POST" });
-      toast(t.sent ? "Đã bật. Một thông báo thử đang tới máy này." : "Đã lưu, nhưng thông báo thử chưa tới được.", t.sent ? "ok" : "info", 5000);
-    } else if (what === "test") {
-      if (push.sub) await ctx.api("/api/push/subscribe", { method: "POST", body: push.sub.toJSON() });   // đăng ký lại phòng hub đã xoá
-      const t = await ctx.api("/api/push/test", { method: "POST" });
-      toast(t.sent ? `Đã gửi thử tới ${t.sent} máy.` : "Không máy nào nhận — tắt rồi bật lại thông báo.", t.sent ? "ok" : "err", 5000);
-    } else if (what === "off" && push.sub) {
-      await ctx.api("/api/push/unsubscribe", { method: "POST", body: push.sub.toJSON() });
-      await push.sub.unsubscribe();
-      push.sub = null; toast("Đã tắt thông báo trên máy này.", "info");
-    }
-    info = await ctx.api("/api/alerts").catch(() => info);
-  } catch (e) {
-    toast(`Không làm được: ${e.message}`, "err", 6000);
-  } finally { push.busy = false; paint(); }
-}
-
 /** Hàng cài đặt gọn: icon · nhãn + chú thích · trạng thái/điều khiển. */
 const row = (icon, iconCls, label, small, ctl) => `<div class="srow"><span class="ic ${iconCls}">${ICONS[icon] || ""}</span>
   <span class="lbl"><b>${esc(label)}</b>${small ? `<small>${small}</small>` : ""}</span><span class="ctl">${ctl}</span></div>`;
 const st = (text, cls = "") => `<span class="st ${cls}">${esc(text)}</span>`;
-
-function pushRow() {
-  const why = "Báo khi bot dừng, kẹt, mất stop trên sàn, tự dừng vì sụt vốn, log lỗi, hub không tải được nến.";
-  if (!canPush) {
-    const small = ios && !standalone
-      ? "Trên iPhone: Safari → <b>Chia sẻ → Thêm vào MH chính</b>, mở app từ biểu tượng đó rồi bật ở đây."
-      : "Trình duyệt này không nhận được thông báo đẩy.";
-    return row("bell", "", "This device", small, st("Unavailable"));
-  }
-  if (!push.checked) return row("bell", "", "This device", esc(why), `<span class="spinner" aria-hidden="true"></span>`);
-  if (swFailed) return row("bell", "bad", "This device", "Không khởi động được phần nhận thông báo (service worker). Đóng app, mở lại rồi thử; trên iPhone phải mở từ biểu tượng ở màn hình chính.", st("Error", "bad"));
-  const on = !!push.sub;
-  return row("bell", on ? "on" : "", "This device", esc(why),
-    `${on ? ibtn("send", { title: "Gửi thông báo thử", data: 'data-push="test"', cls: "sm", disabled: push.busy }) : ""}
-     <label class="switch sm" title="${on ? "Tắt thông báo trên máy này" : "Bật thông báo trên máy này"}"><input type="checkbox" id="pushToggle" ${on ? "checked" : ""} ${push.busy ? "disabled" : ""}><span></span></label>`);
-}
 
 function paint() {
   if (!root) return;
@@ -126,7 +60,6 @@ function paint() {
   const channels = !live ? `<p class="hint">Hub chưa bật phần theo dõi bot nên chưa canh được bot.</p>`
     : infoErr ? errorBox(infoErr, { retry: "alerts", title: "Không hỏi được hub" })
     : `<div class="rows">
-        ${pushRow()}
         ${row("phone", ch.devices ? "on" : "", "Devices", ch.devices ? `${ch.devices} máy đang nhận thông báo` : "Chưa máy nào bật thông báo", st(String(ch.devices || 0), ch.devices ? "on" : ""))}
         ${row("tg", ch.telegram ? "on" : "", "Telegram", ch.telegram ? "Hub gửi cảnh báo và báo cáo tuần qua Telegram" : "Chưa cấu hình · trên máy chủ chạy <code>setup --telegram</code>", st(ch.telegram ? "Connected" : "Not set", ch.telegram ? "on" : ""))}
         ${row("shield", incidents.length ? "bad" : "on", "Incidents", incidents.length ? "Sự cố hub đang báo, kiểm tra lại mỗi phút" : "Không có sự cố", st(incidents.length ? String(incidents.length) : "None", incidents.length ? "bad" : "on"))}

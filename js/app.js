@@ -4,6 +4,7 @@ import { api } from "./api.js";
 import { modeInfo } from "./format.js";
 import { $, $$, esc, toast } from "./ui.js";
 import { APP_VERSION } from "./version.js";
+import { initBell } from "./push.js";
 import * as overview from "./views/overview.js";
 import * as trades from "./views/trades.js";
 import * as backtest from "./views/backtest.js";
@@ -161,5 +162,6 @@ async function init() {
     store.live = null; store.emit();
   }
   registerSw();
+  initBell(api, () => { if (current?.id === "alerts") current.mod.refresh?.(); });
 }
 init();
