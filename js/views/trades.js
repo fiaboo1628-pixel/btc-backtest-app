@@ -72,7 +72,7 @@ function paint() {
     <p class="hint">${esc(data.verdict || "")}${enough ? "" : ` — kết luận chỉ có nghĩa từ ${data.min_trades || 30} lệnh trở lên.`}</p>`;
 
   const rows = list.length ? `<div class="list">${list.map(tradeRow).join("")}</div>`
-    : empty(filter === "all" ? "Chưa có lệnh nào đóng." : `Chưa có lệnh ${filter} nào đóng.`, "Chiến lược vào khoảng 18 lệnh/tháng trên 5 coin; lệnh đầu tiên có thể mất vài ngày.");
+    : empty(filter === "all" ? "Chưa có lệnh nào đóng." : `Chưa có lệnh ${filter} nào đóng.`);
 
   root.innerHTML = `<div class="cards">
     ${card("", `<div class="chips scroll" role="group" aria-label="Filter by coin">

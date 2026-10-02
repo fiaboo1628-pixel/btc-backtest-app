@@ -68,12 +68,12 @@ function paint() {
 
   const recent = !live || infoErr ? "" : (info?.recent?.length
     ? `<div class="list">${info.recent.slice(0, 30).map((r) => `<div class="alert-row"><span>${esc(r.msg)}</span><small>${esc(dateTime(r.t * 1000))} · ${esc(ago(r.t * 1000))}${r.ok === false ? ' · <span class="down">không gửi được</span>' : ""}</small></div>`).join("")}</div>`
-    : `<p class="hint">Chưa có cảnh báo nào. Hub canh bot mỗi phút: không trả lời, không xử lý nến quá 3 phút, bị dừng, lệnh mở không có stop trên sàn, log lỗi.</p>`);
+    : `<p class="hint">Chưa có cảnh báo nào.</p>`);
 
   const wk = !live ? "" : weeklyLoading ? loading("Đang tính báo cáo…")
     : weeklyErr ? errorBox(weeklyErr, { title: "Không lấy được báo cáo" })
     : weekly ? weeklyHtml(weekly)
-    : `<p class="hint">Bot có giữ được lợi thế của backtest không: số lệnh, thắng, PF, lãi, sụt vốn — so với kỳ vọng. Hub tự gửi mỗi thứ Hai 08:00. Bấm ▸ để xem ngay.</p>`;
+    : `<p class="hint">Bấm ▸ để xem báo cáo.</p>`;
   const wkTools = ibtn(weekly ? "refresh" : "play", { title: weekly ? "Tính lại báo cáo" : "Xem báo cáo bây giờ", data: 'data-act="weekly"', cls: "sm accent", disabled: weeklyLoading });
 
   root.innerHTML = `<div class="cards">
@@ -81,9 +81,9 @@ function paint() {
     ${live ? card("Weekly report", wk, { wide: true, tools: wkTools }) : ""}
     ${live ? card("Recent alerts", recent, { wide: true, hint: info?.recent?.length ? `${info.recent.length}` : "" }) : ""}
     ${card("App", `<div class="rows">
-        ${row("tag", "", "Version", "Bấm ↻ để kiểm tra bản mới và tải lại", `${st(APP_VERSION)}${ibtn("reload", { title: "Tải lại app", data: 'data-act="reload"', cls: "sm" })}`)}
+        ${row("tag", "", "Version", "", `${st(APP_VERSION)}${ibtn("reload", { title: "Tải lại app", data: 'data-act="reload"', cls: "sm" })}`)}
         ${row("user", "", "Account", "", st(ctx.store.hub?.user || "–"))}
-        ${row("shield", "", "Security", "App chỉ nói chuyện với hub qua Tailscale; mật khẩu bot và API key ở trên máy chủ, không có trong app.", st("Tailscale", "on"))}
+        ${row("shield", "", "Security", "", st("Tailscale", "on"))}
       </div>`, { wide: true })}
   </div>`;
 }

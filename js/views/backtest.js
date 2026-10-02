@@ -65,13 +65,11 @@ function paramHtml(p) {
   const id = `p_${p.name}`;
   if (p.type === "bool") {
     return `<div class="param" data-name="${esc(p.name)}"><div class="row"><label for="${id}">${esc(p.label)}</label>
-      <span class="switch"><input type="checkbox" id="${id}" data-param="${esc(p.name)}"><span></span></span></div>
-      <div class="help">${esc(p.help)}</div></div>`;
+      <span class="switch"><input type="checkbox" id="${id}" data-param="${esc(p.name)}"><span></span></span></div></div>`;
   }
   const st = stepOf(p);
   return `<div class="param" data-name="${esc(p.name)}"><div class="row"><label for="${id}">${esc(p.label)}</label>
       <input type="number" id="${id}" data-param="${esc(p.name)}" min="${p.min}" max="${p.max}" step="${st}" inputmode="decimal"></div>
-    <div class="help">${esc(p.help)}</div>
     <input type="range" data-slider="${esc(p.name)}" min="${p.min}" max="${p.max}" step="${st}" aria-label="${esc(p.label)} slider">
     <div class="meta"><span>${p.min}</span><span>default ${p.type === "bool" ? "" : p.default}</span><span>${p.max}</span></div></div>`;
 }
@@ -91,7 +89,7 @@ function render() {
       <div class="chips" role="group" aria-label="Preset periods">${ranges.map((r) => `<button class="chip" type="button" data-range="${r.id}" aria-pressed="${S.range === r.id}">${esc(r.label)}</button>`).join("")}</div>
       <div class="grid2">
         <label class="field">From <input type="date" id="dFrom" value="${esc(S.from)}"></label>
-        <label class="field">To <span class="hint" style="margin:0">(trống = đến nay)</span> <input type="date" id="dTo" value="${esc(S.to)}"></label>
+        <label class="field">To <input type="date" id="dTo" value="${esc(S.to)}"></label>
       </div>
       <label class="field" style="margin-top:8px">Stake (USDT) <input type="number" id="wallet" min="10" step="10" inputmode="numeric" value="${S.wallet}"></label>
       <div class="row" style="margin-top:10px">
@@ -136,12 +134,11 @@ function paintBot() {
   const m = modeInfo(s.mode);
   const coins = (s.pairs || []).map((p) => `<span class="coinchip">${esc(p.split("/")[0])}</span>`).join("");
   box.innerHTML = `<dl class="info">
-    <dt>Account</dt><dd><span class="pill ${m.cls}">${esc(m.name)}</span> <span class="hint">${esc(m.help)}</span></dd>
+    <dt>Account</dt><dd><span class="pill ${m.cls}">${esc(m.name)}</span></dd>
     <dt>Strategy</dt><dd>${esc(s.strategy)} · ${esc(s.timeframe)} · max ${esc(s.max_open_trades)} open · ${esc(s.state)}</dd>
     <dt>Pairs</dt><dd>${coins}</dd>
     <dt>Open</dt><dd>${esc(s.open_trades)} · P&L <span class="${cls(s.profit_pct)}">${signedPct(s.profit_pct)}</span></dd>
-  </dl>
-  <p class="hint">Backtest chạy bằng freqtrade trên máy chủ, đúng các coin và nến trên, khớp lệnh theo nến 15m. Nến có tới ngày nào: xem màn <a href="#data">Data</a>.</p>`;
+  </dl>`;
 }
 
 function equity(r) {
@@ -182,7 +179,6 @@ function paintResult() {
     ${equity(r)}
     <div class="tablewrap"><table><thead><tr><th>Year</th><th>Trades</th><th>P&L (${esc(cur)})</th><th>PF</th></tr></thead><tbody>${years || `<tr><td colspan="4" class="hint">Không có</td></tr>`}</tbody></table></div>
     ${pairs ? `<div class="tablewrap" style="margin-top:10px"><table><thead><tr><th>Coin</th><th>Trades</th><th>P&L (${esc(cur)})</th><th>%</th><th>PF</th><th>Win</th></tr></thead><tbody>${pairs}</tbody></table></div>` : ""}
-    <p class="hint">PF "–" = coin không có lệnh lỗ. Kết quả quá khứ không bảo đảm tương lai.</p>
     ${!sameParams(S.schema.params, run.params, S.values) ? note("Tham số trên form đã đổi sau lần chạy này — chạy lại trước khi áp dụng.", "warn") : ""}`;
 }
 
@@ -311,7 +307,6 @@ async function openConfirm() {
   const tested = S.lastRun && sameParams(S.schema.params, S.lastRun.params, S.values);
   const m = modeInfo(S.bot?.mode);
   const html = `<p><span class="pill ${m.cls}">${esc(m.name)}</span>${S.bot?.strategy ? ` · ${esc(S.bot.strategy)}` : ""}</p>
-    <p class="hint">Bot nạp lại chiến lược ngay. Lệnh đang mở giữ stoploss ban đầu; luật thoát dùng tham số mới.</p>
     <ul class="plain">${d.map((c) => `<li><b>${esc(c.label)}</b>: ${esc(c.from)} → <b>${esc(c.to)}</b></li>`).join("")}</ul>
     ${tested ? note(`Đã backtest bộ này: ${signedPct(S.lastRun.result.profit_pct)}, DD ${pct(S.lastRun.result.max_dd_pct, 1)} (${esc(S.lastRun.result.timerange)}).`, "ok")
              : note("Bộ tham số này CHƯA được backtest trong phiên này. Nên chạy backtest trước.", "warn")}`;

@@ -72,7 +72,7 @@ function paint(store) {
     ${fresh ? `<div class="wide">${fresh}</div>` : ""}
     ${live.mode_warning ? `<div class="wide">${note(live.mode_warning, "warn")}</div>` : ""}
     ${card("", `<div class="mode-card ${m.cls}" style="border:0;padding:0;box-shadow:none;background:none">
-        <div><span class="mode-name">${esc(m.name)}</span><p class="hint">${esc(m.help)} ${live.exchange ? `· ${esc(live.exchange)}` : ""}</p></div></div>
+        <div><span class="mode-name">${esc(m.name)}</span><p class="hint">${esc(live.exchange || "")}</p></div></div>
       ${statusBlock(live)}
       <p class="hint">${esc(live.strategy || "")} · ${esc(live.timeframe || "")} · bot kiểm tra ${live.last_process_ts ? esc(ago(live.last_process_ts * 1000)) : "–"}</p>`, { wide: true })}
 
@@ -96,14 +96,14 @@ function paint(store) {
       ${drawdownBar(halt)}
       <p class="hint">${halt.halt_on === false ? "Tự dừng đang TẮT (halt_on) — bot sẽ không tự ngừng khi thua nhiều." :
         halt.halted ? "Đã quá ngưỡng: bot không vào lệnh mới. Lệnh đang mở vẫn được quản lý bình thường." :
-        `Còn cách ngưỡng tự dừng ${pct(Math.max(0, halt.threshold_pct - halt.max_dd_pct), 1)}. Tính trên lãi/lỗ đã chốt, như luật của bot.`}</p>`)}
+        `Còn cách ngưỡng tự dừng ${pct(Math.max(0, halt.threshold_pct - halt.max_dd_pct), 1)}.`}</p>`)}
 
     ${card("Open positions", openTrades(live, cur), { wide: true, hint: `${live.open.length}` })}
 
-    ${card("Equity", eq ? lineChart(eq, { label: "Equity", fmtY: (v) => money(v, cur, 0), fmtX: (v) => isoDay(new Date(v).toISOString()) }) + `<p class="hint">Vốn sau mỗi lệnh đóng, ${live.equity.length} lệnh.</p>`
+    ${card("Equity", eq ? lineChart(eq, { label: "Equity", fmtY: (v) => money(v, cur, 0), fmtX: (v) => isoDay(new Date(v).toISOString()) })
       : `<p class="hint">Cần ít nhất 2 lệnh đã đóng mới vẽ được đường vốn.</p>`)}
 
-    ${card("Daily P&L", barChart(days, { cur, fmt: (v) => signedMoney(v, "", 2).trim(), fmtDay: isoDay }) + `<p class="hint">${days.length} ngày gần nhất (ngày theo giờ UTC của bot).</p>`)}
+    ${card("Daily P&L", barChart(days, { cur, fmt: (v) => signedMoney(v, "", 2).trim(), fmtDay: isoDay }))}
 
     ${live.logs?.length ? card("Log", `<div class="logs">${live.logs.map((l) => `<p class="${l.level === "WARNING" ? "warn" : "down"}"><small>${esc(dateTime(l.t * 1000))}</small>${esc(l.msg)}</p>`).join("")}</div>`, { wide: true, hint: `${live.logs.length} warnings` }) : ""}
   </div>`;
