@@ -9,7 +9,7 @@ Thoát lệnh:
   - SL ban đầu = r_atr × ATR(20) của nến tín hiệu (= 1R)
   - Thoát khi close thủng đáy (long) / vượt đỉnh (short) của `exit_period` nến trước đó
   - Khối lượng: rủi ro risk_pct % vốn mỗi lệnh; fixed_lev: luôn dùng max_lev để ký quỹ mỗi lệnh nhỏ
-  - Live/dry-run: ngừng vào lệnh mới khi sụt vốn đã chốt > 15% (halt_on)
+  - Live/dry-run: ngừng vào lệnh mới khi sụt vốn đã chốt > 25% (halt_on)
 Backtest (freqtrade, 5 coin, 04/2020 → 09/2026, chi tiết 15m, phí + trượt 0.08%/chiều, rủi ro 0.25%, vốn 1000):
 1470 lệnh (~19/tháng), thắng 32%, PF 1.55, lãi kép 20.5%/năm, max DD 11%, 7/7 năm lãi. 5 coin được chọn theo
 thanh khoản hôm nay — trùng 5 coin tốt nhất trong research/robustness_trend_2026-10.md, nên số trên lạc quan
@@ -39,8 +39,9 @@ from freqtrade.strategy import (
 log = logging.getLogger(__name__)
 
 # Chỉ xét sụt vốn: luật "PF < 1 sau 60 lệnh" của DonchianRevert dừng nhầm 42% số lần bắt đầu trong năm đầu
-# (chiến lược thắng 32%, lãi theo cụm). Backtest 5 coin max DD 11%, chưa lần nào chạm 15%.
-HALT_DD = 0.15
+# (chiến lược thắng 32%, lãi theo cụm). 25% (02/10/2026): live chạy SL 3×ATR, rủi ro 1%/lệnh — backtest 5 coin vốn 500
+# 2021→10/2026 max DD 23.7%, ngưỡng 15% sẽ dừng bot ở đợt sụt bình thường. Đổi cùng HALT_DD_PCT trong bot/hub/live.py.
+HALT_DD = 0.25
 
 
 def halt_reason(start: float, profits: list[float]) -> str | None:

@@ -201,19 +201,19 @@ def test_live_summary(tmp_path, monkeypatch):
 
 
 def test_live_halt_and_equity(tmp_path):
-    """Sụt vốn tính như TrendBreakout.halt_reason; dừng khi quá 15% (halt_on bật) hoặc log đã báo dừng."""
+    """Sụt vốn tính như TrendBreakout.halt_reason; dừng khi quá 25% (halt_on bật) hoặc log đã báo dừng."""
     import live
     tr = lambda ts, p: {"close_timestamp": ts, "profit_abs": p}  # noqa: E731
-    closed = [tr(3, -100), tr(1, 50), tr(2, -120)]                    # thứ tự đóng: +50, -120, -100
-    assert live.equity_curve(1000, closed) == [[1, 1050], [2, 930], [3, 830]]
-    dd = live.drawdown(1000, [50, -120, -100])
-    assert dd == {"current_pct": round(100 * (1 - 830 / 1050), 2), "max_pct": round(100 * (1 - 830 / 1050), 2)}
+    closed = [tr(3, -200), tr(1, 50), tr(2, -120)]                    # thứ tự đóng: +50, -120, -200
+    assert live.equity_curve(1000, closed) == [[1, 1050], [2, 930], [3, 730]]
+    dd = live.drawdown(1000, [50, -120, -200])
+    assert dd == {"current_pct": round(100 * (1 - 730 / 1050), 2), "max_pct": round(100 * (1 - 730 / 1050), 2)}
     assert live.drawdown(0, []) == {"current_pct": 0.0, "max_pct": 0.0}
     h = live.halt_view(1000, closed, True, [])
-    assert h["halted"] is True and h["max_dd_pct"] > 15 and h["threshold_pct"] == 15
+    assert h["halted"] is True and h["max_dd_pct"] > 25 and h["threshold_pct"] == 25
     assert live.halt_view(1000, closed, False, [])["halted"] is False          # người dùng đã tắt halt_on
     assert live.halt_view(1000, [tr(1, -50)], True, [])["halted"] is False
-    assert live.halt_view(1000, [], True, [{"msg": "DỪNG VÀO LỆNH MỚI: sụt vốn 16% > 15%"}])["halted"] is True
+    assert live.halt_view(1000, [], True, [{"msg": "DỪNG VÀO LỆNH MỚI: sụt vốn 26% > 25%"}])["halted"] is True
     assert live.halt_view(1000, [], None, [])["halt_on"] is None
     # halt_on đọc từ file tham số LIVE (trang Backtest ghi), không có file = mặc định bật
     assert live.halt_on_param(tmp_path, "TrendBreakout") is True

@@ -93,8 +93,8 @@ class FakeBots:
         self.closed = [t for t in self.closed if t["close_timestamp"] < now]
         self.closed_pnl = sum(t["profit_abs"] for t in self.closed)
         if scenario == "halted":
-            self.closed_pnl = -180.0
-            self.closed[-1]["profit_abs"] = self.closed[-1]["profit_abs"] - (sum(t["profit_abs"] for t in self.closed) + 180)
+            self.closed_pnl = -280.0
+            self.closed[-1]["profit_abs"] = self.closed[-1]["profit_abs"] - (sum(t["profit_abs"] for t in self.closed) + 280)
         self.open = [] if scenario in ("empty", "halted") else [
             open_trade(901, "BTC", False, 7.4, True), open_trade(902, "SOL", True, -2.1, scenario != "live")]
         self.bt = {"status": "not_started", "running": False, "progress": 0, "step": None, "status_msg": None, "result": None}
@@ -144,7 +144,7 @@ class FakeBots:
                     ["d", now - 2 * 3600_000, "freqtrade.exchange", "WARNING", "Binance trả lời chậm (1.9 s)"]]
             if self.sc == "halted":
                 rows.append(["d", now - 600_000, "TrendBreakout", "ERROR",
-                             "DỪNG VÀO LỆNH MỚI: sụt vốn 18.0% > 15% — bỏ tín hiệu ETH/USDT:USDT long. Xem lại rồi tắt halt_on để chạy tiếp."])
+                             "DỪNG VÀO LỆNH MỚI: sụt vốn 28.0% > 25% — bỏ tín hiệu ETH/USDT:USDT long. Xem lại rồi tắt halt_on để chạy tiếp."])
             return {"logs": rows}
         if path == "/health":
             return {"last_process_ts": time.time() - 4}

@@ -4,7 +4,7 @@ Repo gồm hai phần:
 
 | Phần | Ở đâu | Việc |
 |---|---|---|
-| **Bot** | `bot/` | freqtrade 2026.8 chạy chiến lược TrendBreakout (nến 4h, 5 coin BTC ETH SOL XRP DOGE, tối đa 5 lệnh, rủi ro 0,25% vốn/lệnh, tự dừng vào lệnh mới khi sụt vốn > 15%) trên Binance Demo, sắp chuyển sang tiền thật. Cách cài: [`bot/deploy/README.md`](bot/deploy/README.md). Nghiên cứu: `bot/research/`. |
+| **Bot** | `bot/` | freqtrade 2026.8 chạy chiến lược TrendBreakout (nến 4h, 5 coin BTC ETH SOL XRP DOGE, tối đa 5 lệnh, SL 3×ATR, rủi ro 1% vốn/lệnh, tự dừng vào lệnh mới khi sụt vốn > 25%) trên Binance, tiền thật. Cách cài: [`bot/deploy/README.md`](bot/deploy/README.md). Nghiên cứu: `bot/research/`. |
 | **Hub + app** | `bot/hub/` (server) và thư mục gốc (`index.html`, `js/`, `css/`, `icons/`) | Một server FastAPI trên máy nhà (cổng 8090, mở qua Tailscale) phục vụ **app điều khiển bot** cho iPhone (cài lên màn hình chính như PWA) và PC. Mọi số liệu đi qua hub; mật khẩu bot và API key không bao giờ tới trình duyệt. |
 
 ## App: bot đang làm gì, tiền thế nào, có gì cần làm
@@ -13,7 +13,7 @@ Nhãn, tiêu đề, nút dùng tiếng Anh ngắn gọn; giải thích, thông b
 
 | Màn | Trả lời câu hỏi | Nguồn |
 |---|---|---|
-| **Overview** | Chế độ (Dry-run / Demo / **LIVE**, màu khác nhau), bot đang chạy hay đã dừng / tự dừng vì sụt vốn / không xử lý nến; vốn, lãi lỗ hôm nay + tổng, sụt vốn so với ngưỡng tự dừng 15%; lệnh đang mở (coin, chiều, lãi lỗ, giá stop, stop có trên sàn không); đường vốn; lãi lỗ theo ngày; cảnh báo trong log bot | `/api/live` (15 s/lần khi app đang hiện) |
+| **Overview** | Chế độ (Dry-run / Demo / **LIVE**, màu khác nhau), bot đang chạy hay đã dừng / tự dừng vì sụt vốn / không xử lý nến; vốn, lãi lỗ hôm nay + tổng, sụt vốn so với ngưỡng tự dừng 25%; lệnh đang mở (coin, chiều, lãi lỗ, giá stop, stop có trên sàn không); đường vốn; lãi lỗ theo ngày; cảnh báo trong log bot | `/api/live` (15 s/lần khi app đang hiện) |
 | **Trades** | Mọi lệnh đã đóng, lọc theo coin; số lệnh, thắng, profit factor; so với kỳ vọng nghiên cứu (~19 lệnh/tháng, thắng 32%, PF 1,55) | `/api/trades` |
 | **Backtest** | Chỉnh tham số chiến lược (nhãn ngắn + giải thích tiếng Việt, giới hạn từ chính class chiến lược), chọn khoảng thời gian và vốn thử, chạy backtest **bằng freqtrade ở LAB** (khớp lệnh theo nến 15m), kết quả tóm tắt + theo năm + theo coin + đường vốn, lịch sử các lần thử, **Apply to bot** với hộp xác nhận ghi rõ giá trị cũ → mới và tài khoản nào | `/api/tune/*` |
 | **Data** | Nến LAB có coin nào, khung nào, từ ngày nào tới ngày nào, hub tự cập nhật lúc nào, đang tải không, lỗi gì | `/api/tune/live` |
