@@ -8,7 +8,7 @@ Hub phục vụ **app điều khiển bot** (thư mục gốc repo: `index.html`
 |---|---|---|
 | `/` | App (Tổng quan, Lệnh, Backtest, Dữ liệu, Cảnh báo). `/tune/` cũ chuyển về `/#backtest` | `server.py` |
 | `/api/hub` | Hub có những gì (`features.live/tune/data`), người đang đăng nhập, tên chiến lược | `server.py` |
-| `/api/live` | Trạng thái bot: chế độ (lấy từ bot đang chạy, cảnh báo nếu khác file trên đĩa), số dư, lợi nhuận, **sụt vốn so với ngưỡng tự dừng 15%** (`halt`, cùng cách tính `TrendBreakout.halt_reason`), lệnh mở (stop có trên sàn không), 20 lệnh vừa đóng, lãi theo ngày, **đường vốn**, log cảnh báo | `live.py` |
+| `/api/live` | Trạng thái bot: chế độ (lấy từ bot đang chạy, cảnh báo nếu khác file trên đĩa), số dư, lợi nhuận, **sụt vốn so với ngưỡng tự dừng 25%** (`halt`, cùng cách tính `TrendBreakout.halt_reason`), lệnh mở (stop có trên sàn không), 20 lệnh vừa đóng, lãi theo ngày, **đường vốn**, log cảnh báo | `live.py` |
 | `/api/trades` | Mọi lệnh đã đóng + thống kê (số lệnh, thắng, PF, sụt vốn) và kỳ vọng từ backtest (`weekly.EXPECT`) | `live.py` |
 | `/api/tune/schema` | Tham số chiến lược đọc từ class (tên, nhãn tiếng Việt, min/max/bước, mặc định) + giá trị LAB và LIVE | `tune.py` |
 | `/api/tune/backtest` | POST chạy backtest ở LAB (freqtrade webserver, nến chi tiết 15m, từ chối nếu một coin thiếu 15m); GET tiến độ / kết quả | `tune.py` |

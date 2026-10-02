@@ -16,7 +16,7 @@ import weekly
 from tune import FtClient
 
 # Ngưỡng tự dừng vào lệnh mới của chiến lược (TrendBreakout.HALT_DD); không import chiến lược vì cần talib.
-HALT_DD_PCT = 15.0
+HALT_DD_PCT = 25.0
 HALT_LOG = "DỪNG VÀO LỆNH MỚI"          # dòng log ERROR của chiến lược khi đã dừng
 
 
