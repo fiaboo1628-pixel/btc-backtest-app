@@ -46,6 +46,10 @@ PC / iPhone ──Tailscale HTTPS──► tailscale serve ──► hub (127.0.
 `bot/deploy/hub.json` do `docker compose run --rm setup` tạo (tự chuyển từ `tuner.json` cũ, giữ mật khẩu).
 Mẫu đầy đủ: `hub.example.json`. Thêm coin/khung: thêm dòng vào `data.datasets` rồi `docker compose restart hub`.
 
+Nến cho LAB (backtest ở `/tune/`, `user_data/data/binance/futures`) hub tự cập nhật lúc khởi động và mỗi 24h
+(`labdata.py`: `freqtrade download-data` cho các coin + khung của bot trong `config.base.json`, thêm 15m; chỉ
+tải phần mới). Thất bại 2 lần liền thì gửi cảnh báo. Tắt: `"lab_data_update": false`.
+
 ## Kiểm thử
 
 ```bash
