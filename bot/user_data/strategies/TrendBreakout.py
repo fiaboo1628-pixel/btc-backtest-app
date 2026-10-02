@@ -74,8 +74,8 @@ class TrendBreakout(IStrategy):
 
     exit_period = IntParameter(5, 50, default=10, space="sell", optimize=False)
     r_atr = DecimalParameter(1.0, 6.0, default=2.0, decimals=1, space="sell", optimize=False)
-    risk_pct = DecimalParameter(0.1, 3.0, default=0.25, decimals=2, space="sell", optimize=False)
-    max_lev = IntParameter(1, 10, default=5, space="sell", optimize=False)
+    risk_pct = DecimalParameter(0.1, 20.0, default=0.25, decimals=2, space="sell", optimize=False)
+    max_lev = IntParameter(1, 50, default=5, space="sell", optimize=False)
     fixed_lev = BooleanParameter(default=True, space="sell", optimize=False)
     # Tự dừng vào lệnh mới (chỉ live/dry-run, backtest không đổi) khi chạm ngưỡng của halt_reason().
     halt_on = BooleanParameter(default=True, space="sell", optimize=False)
