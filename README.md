@@ -12,7 +12,14 @@ Backtest chiến lược crypto ngay trên trình duyệt, không cần server:
   khối lượng, **Market Structure Break & Order Block** — xu hướng MSB, vị trí giá trong vùng Bu-OB/Be-OB). Mỗi điều kiện: `chỉ báo(tham số) [khung] ≤ ≥ < > cắt lên/cắt xuống ngưỡng`,
   các điều kiện nối bằng **VÀ**, Long và Short riêng.
 - **Thoát lệnh theo R**: 1R = k × ATR(14) nến tín hiệu; lãi chạm mốc thì stoploss bám đỉnh/đáy;
-  giới hạn thời gian giữ lệnh. Khối lượng theo % vốn rủi ro, có trần đòn bẩy; phí + funding thật.
+  giới hạn thời gian giữ lệnh; hoặc thoát theo kênh Donchian (TrendBreakout). Khối lượng theo % vốn rủi ro,
+  có trần đòn bẩy (hoặc đòn bẩy cố định như bot); phí + funding thật.
+- **Nhiều coin chung tài khoản** (khung "Portfolio" trong Results): chạy cùng một chiến lược trên nhiều coin
+  (mặc định 5 coin của bot: BTC ETH SOL XRP DOGE), vốn chung — khối lượng theo % rủi ro của vốn hiện tại,
+  tối đa N lệnh mở (1 lệnh/coin), tín hiệu cùng nến xử lý theo thứ tự freqtrade (coin đang có lệnh trước,
+  rồi theo whitelist), tùy chọn tự dừng vào lệnh mới khi sụt vốn > 15% như bot. Kết quả chung + bảng theo coin.
+- **Send to bot**: đọc chiến lược bot đang chạy từ Hub (`/api/tune/schema`), đổi chiến lược trong app sang
+  tham số bot theo đúng khuôn (TrendBreakout hoặc DonchianRevert) và ngược lại; báo lỗi rõ khi không khớp khuôn.
 - **Chống tự lừa mình**: kết quả luôn tách 2 giai đoạn; đếm số lần thử và cảnh báo khi thử quá nhiều.
 - Lưu / xuất / nhập chiến lược dạng JSON. Cài lên màn hình chính như app (PWA), mở được khi mất mạng.
 
@@ -28,6 +35,16 @@ Bộ máy backtest mô phỏng đúng cách freqtrade backtest từng nến. Đ�
 | Chênh giá ra lớn nhất | | 0,09 USD (làm tròn) |
 | Chênh lãi/lỗ lớn nhất 1 lệnh | | 0,004 USDT |
 
+Chế độ nhiều coin chung tài khoản đối chiếu với freqtrade chạy TrendBreakout như bot (5 coin BTC ETH SOL XRP DOGE,
+nến 4h, max_open_trades 5, rủi ro 0.25 %, đòn bẩy cố định 5, 09/2025 → 08/2026):
+
+| | freqtrade | web app |
+|---|---|---|
+| Số lệnh | 241 | 241 — trùng coin, chiều, giờ vào, giờ ra, giá, khối lượng, đòn bẩy **từng lệnh** |
+| Lợi nhuận | +21,65 % | +21,65 % |
+| Sụt vốn lớn nhất | 10,46 % | 10,46 % |
+| Chênh lãi/lỗ lớn nhất 1 lệnh | | < 1e-8 USDT |
+
 Các chỉ báo khớp TA-Lib tới sai số 1e-6 (`tests/indicators.test.mjs`).
 
 ## Chạy
@@ -37,7 +54,9 @@ Không có bước build, không phụ thuộc thư viện ngoài.
 
 Test: `npm test` (Node 22+). `tests/parity.test.mjs` so bộ máy với freqtrade 2026.8 từng lệnh
 (DonchianRevert, nến 1m detail, 02–03/2026; fixture `tests/fixtures/parity_donchian_1m.json.gz`,
-tạo lại bằng `tools/export_parity.py`).
+tạo lại bằng `tools/export_parity.py`). `tests/parity_trend.test.mjs` so chế độ nhiều coin với freqtrade
+(TrendBreakout 5 coin, nến 4h, 09/2025 → 08/2026; fixture `tests/fixtures/parity_trend_4h.json.gz`, tạo lại bằng
+workflow `parity-trend` trên GitHub Actions — tải nến từ data.binance.vision, chạy freqtrade, commit fixture lên nhánh).
 
 ## Lưu ý
 
@@ -56,13 +75,15 @@ js/indicators.js             chỉ báo (khớp TA-Lib)
 js/catalog.js                thư viện chỉ báo cho bộ lắp ghép
 js/rules.js                  điều kiện → tín hiệu (nhiều khung)
 js/timeframes.js             ghép nến, căn khung lớn
-js/engine.js                 bộ máy backtest futures
-js/worker.js                 chạy backtest ở luồng riêng
+js/engine.js                 bộ máy backtest futures (sổ lệnh chung + bộ chạy từng coin)
+js/portfolio.js              nhiều coin chung tài khoản theo thứ tự freqtrade; bước giá/khối lượng từng coin
+js/botparams.js              đổi chiến lược app ↔ tham số bot (khuôn TrendBreakout, DonchianRevert)
+js/worker.js                 chạy backtest ở luồng riêng (một coin hoặc nhiều coin)
 js/replay.js                 xem lại lệnh kiểu MT5 (vendor/lightweight-charts.js, tải khi mở)
 api/binance.js               proxy Binance trên Vercel (khi trình duyệt bị chặn)
 presets/                     chiến lược mẫu
 sw.js, manifest.webmanifest  PWA
-bot/                         bot freqtrade DonchianRevert + nghiên cứu (không deploy lên Vercel)
+bot/                         bot freqtrade TrendBreakout 4h 5 coin + nghiên cứu (không deploy lên Vercel)
 .devcontainer/               Codespaces: tự bật bot dry-run trong bot/deploy
 ```
 

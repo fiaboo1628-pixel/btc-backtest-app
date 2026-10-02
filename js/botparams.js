@@ -101,7 +101,8 @@ const TB = {
     out.long = side(1);
     out.short = p.short_enabled ? side(-1) : [];
     out.exit = { ...out.exit, rAtr: p.r_atr, atrN: 20, trailStartR: 0, tpR: 0, maxHoldBars: 0, exitChannel: p.exit_period };
-    out.account = { ...out.account, riskPct: p.risk_pct, maxLev: p.max_lev, fixedLev: !!p.fixed_lev };
+    // stoploss = -0.50 của TrendBreakout.py: trần đòn bẩy để stop 1R luôn gần hơn stop cứng
+    out.account = { ...out.account, riskPct: p.risk_pct, maxLev: p.max_lev, fixedLev: !!p.fixed_lev, hardStop: 0.5 };
     return out;
   },
 };
@@ -177,7 +178,7 @@ const DR = {
       out.short = setSide(base, "dc_short");
     } else out.short = [];
     out.exit = { ...out.exit, rAtr: p.r_atr, trailStartR: p.trail_on ? p.trail_start_r : 0, trailDistR: p.trail_dist_r, tpR: p.tp_r || 0 };
-    out.account = { ...out.account, riskPct: p.risk_pct, maxLev: p.max_lev };
+    out.account = { ...out.account, riskPct: p.risk_pct, maxLev: p.max_lev, hardStop: 0.15 };   // stoploss = -0.15
     return out;
   },
 };

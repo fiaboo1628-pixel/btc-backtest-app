@@ -40,6 +40,19 @@ test("fixedLev: đòn bẩy luôn = trần, khối lượng (notional) không đ
   assert.ok(Math.abs(a.amount - 10) < 1e-9);                   // 1000 × 1% / R 1 = 10 coin
 });
 
+test("hardStop: đòn bẩy ≤ floor(0.9 × |stoploss| / R%) như leverage() của bot, kể cả khi fixedLev", () => {
+  const k = flat(100, 6); const sig = new Int8Array(6); sig[1] = 1;
+  // R = 2 × 5 = 10 = 10% giá → cap = floor(0.9 × 0.5 / 0.1) = 4 < maxLev 5; notional không đổi (10 USDT/R → 1 coin)
+  const a = { ...acc, riskPct: 1, amountStep: 0.0001, hardStop: 0.5 };
+  const t = backtest(k, sig, new Float64Array(6).fill(5), { account: a, exit }).trades[0];
+  assert.equal(t.leverage, 4); assert.ok(Math.abs(t.amount - 1) < 1e-9);
+  // không fixedLev: cần đòn bẩy 1 → cap không chặn; R nhỏ (1%) → cap 45, giữ maxLev 5
+  assert.equal(backtest(k, sig, new Float64Array(6).fill(5), { account: { ...a, fixedLev: false }, exit }).trades[0].leverage, 1);
+  assert.equal(backtest(k, sig, new Float64Array(6).fill(0.5), { account: a, exit }).trades[0].leverage, 5);
+  // hardStop 0 = tắt
+  assert.equal(backtest(k, sig, new Float64Array(6).fill(5), { account: { ...a, hardStop: 0 }, exit }).trades[0].leverage, 5);
+});
+
 test("bước giá theo tháng từ số lẻ của nến, như get_tick_size_over_time; lệnh giữ bước của lúc vào", () => {
   const k = { t: [], o: [], h: [], l: [], c: [] };
   const m0 = Date.UTC(2024, 0, 1), m1 = Date.UTC(2024, 1, 1), m2 = Date.UTC(2024, 2, 1);

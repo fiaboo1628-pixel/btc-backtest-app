@@ -23,6 +23,7 @@
     "riskPct": 0.25,
     "maxLev": 5,
     "fixedLev": true,
+    "hardStop": 0.5,
     "fee": 0.0008
   }
 }

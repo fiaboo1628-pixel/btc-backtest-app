@@ -33,6 +33,8 @@ export const DEFAULT_ACCOUNT = {
   riskPct: 1,          // % vốn rủi ro mỗi lệnh
   maxLev: 5,
   fixedLev: false,     // true: luôn dùng maxLev (fixed_lev của bot) — ký quỹ mỗi lệnh nhỏ hơn, khối lượng không đổi
+  hardStop: 0,         // stop cứng của freqtrade (|stoploss|, vd 0.5): đòn bẩy ≤ 0.9 × hardStop / R% để stop 1R luôn
+                       // gần hơn stop cứng (leverage() của bot). 0 = không giới hạn
   fee: 0.0005,         // phí mỗi chiều: taker 0.05% (bot vào/ra bằng lệnh market)
   tradableRatio: 0.99, // như tradable_balance_ratio của freqtrade
   slippage: 0,         // trượt giá mỗi lệnh market (tỉ lệ, vd 0.0005 = 0.05%); 0 = như backtest freqtrade
@@ -187,7 +189,8 @@ export function createRunner(c, sig, atr, opts, book) {
       const rPct = r / eo;
       const risk = acc.riskPct / 100;
       // đòn bẩy nguyên, làm tròn lên: Binance làm tròn xuống đòn bẩy lẻ (thiếu ký quỹ), notional không đổi
-      const lev = acc.fixedLev ? acc.maxLev : Math.min(Math.max(Math.ceil(risk / rPct - 1e-9), 1), acc.maxLev);
+      const cap = acc.hardStop > 0 ? Math.max(1, Math.floor(0.9 * acc.hardStop / rPct)) : Infinity;
+      const lev = Math.min(acc.fixedLev ? acc.maxLev : Math.max(Math.ceil(risk / rPct - 1e-9), 1), acc.maxLev, cap);
       const equity = book.equity();
       // vốn còn rảnh = vốn − ký quỹ các lệnh đang mở (get_available_stake_amount của freqtrade)
       const available = Math.max(equity - book.tiedUp, 0);
