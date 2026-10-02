@@ -1,4 +1,4 @@
-// Màn Backtest / Chỉnh tham số: thay trang /tune/ cũ. Chỉnh tham số theo schema của hub, chạy backtest freqtrade ở LAB
+// Màn Backtest / Parameters: thay trang /tune/ cũ. Chỉnh tham số theo schema của hub, chạy backtest freqtrade ở LAB
 // (/api/tune/backtest), xem kết quả theo năm / theo coin, lịch sử các lần thử, áp dụng cho bot sau khi xác nhận.
 import { cls, fmt, isoDay, modeInfo, money, pct, signed, signedPct, dateTime } from "../format.js";
 import { clampParam, diffParams, rangePresets, sameParams, timerange } from "../model.js";
@@ -15,7 +15,7 @@ export function mount(el, c) {
   root = el; ctx = c;
   if (!ctx.store.hub?.features?.tune) {
     root.innerHTML = `<div class="cards">${card("", `<p>Hub chưa bật phần backtest / chỉnh tham số.</p>
-      <p class="hint">Cần cả khối <code>lab</code> (freqtrade webserver) và <code>live</code> trong <code>bot/deploy/hub.json</code>, và hub chạy trong image freqtrade (xem log hub: "Tắt Chỉnh tham số").</p>`)}</div>`;
+      <p class="hint">Cần cả khối <code>lab</code> (freqtrade webserver) và <code>live</code> trong <code>bot/deploy/hub.json</code>, và hub chạy trong image freqtrade (xem log hub).</p>`)}</div>`;
     return;
   }
   root.addEventListener("click", onClick);
@@ -69,8 +69,8 @@ function paramHtml(p) {
   return `<div class="param" data-name="${esc(p.name)}"><div class="row"><label for="${id}">${esc(p.label)}</label>
       <input type="number" id="${id}" data-param="${esc(p.name)}" min="${p.min}" max="${p.max}" step="${st}" inputmode="decimal"></div>
     <div class="help">${esc(p.help)}</div>
-    <input type="range" data-slider="${esc(p.name)}" min="${p.min}" max="${p.max}" step="${st}" aria-label="${esc(p.label)} (thanh trượt)">
-    <div class="meta"><span>${p.min}</span><span>mặc định ${p.type === "bool" ? "" : p.default}</span><span>${p.max}</span></div></div>`;
+    <input type="range" data-slider="${esc(p.name)}" min="${p.min}" max="${p.max}" step="${st}" aria-label="${esc(p.label)} slider">
+    <div class="meta"><span>${p.min}</span><span>default ${p.type === "bool" ? "" : p.default}</span><span>${p.max}</span></div></div>`;
 }
 
 function render() {
@@ -82,24 +82,24 @@ function render() {
   const ranges = rangePresets();
   root.innerHTML = `<div class="cards">
     <div class="wide" id="topMsg"></div>
-    ${card("Bot đang chạy", `<div id="botInfo">${loading("Đang hỏi bot…")}</div>`, { wide: true })}
+    ${card("Live bot", `<div id="botInfo">${loading("Đang hỏi bot…")}</div>`, { wide: true })}
     ${sections}
-    ${card("Khoảng thời gian & vốn thử", `
-      <div class="chips" role="group" aria-label="Khoảng thời gian có sẵn">${ranges.map((r) => `<button class="chip" type="button" data-range="${r.id}" aria-pressed="${S.range === r.id}">${esc(r.label)}</button>`).join("")}</div>
+    ${card("Period & stake", `
+      <div class="chips" role="group" aria-label="Preset periods">${ranges.map((r) => `<button class="chip" type="button" data-range="${r.id}" aria-pressed="${S.range === r.id}">${esc(r.label)}</button>`).join("")}</div>
       <div class="grid2">
-        <label class="field">Từ ngày <input type="date" id="dFrom" value="${esc(S.from)}"></label>
-        <label class="field">Đến ngày (trống = đến nay) <input type="date" id="dTo" value="${esc(S.to)}"></label>
+        <label class="field">From <input type="date" id="dFrom" value="${esc(S.from)}"></label>
+        <label class="field">To <span class="hint" style="margin:0">(trống = đến nay)</span> <input type="date" id="dTo" value="${esc(S.to)}"></label>
       </div>
-      <label class="field" style="margin-top:8px">Vốn thử (USDT) <input type="number" id="wallet" min="10" step="10" inputmode="numeric" value="${S.wallet}"></label>
+      <label class="field" style="margin-top:8px">Stake (USDT) <input type="number" id="wallet" min="10" step="10" inputmode="numeric" value="${S.wallet}"></label>
       <div class="row" style="margin-top:10px">
-        <button class="btn sm" type="button" data-act="default">Về mặc định</button>
-        <button class="btn sm" type="button" data-act="live">Lấy tham số bot đang chạy</button>
+        <button class="btn sm" type="button" data-act="default" title="Đưa mọi tham số về mặc định của chiến lược">Defaults</button>
+        <button class="btn sm" type="button" data-act="live" title="Lấy lại bộ tham số bot đang chạy">Load live</button>
       </div>`)}
-    ${card("Kết quả backtest", `<div id="resultMsg"></div><div class="progress hidden" id="prog"><i></i></div><div id="result"><p class="hint">Chưa chạy lần nào trong phiên này. Chỉnh tham số rồi bấm <b>Chạy backtest</b>.</p></div>`, { wide: true, id: "resultBox" })}
-    ${card("Các lần thử gần đây", `<div id="hist"><p class="hint">Chưa có.</p></div>`, { wide: true, id: "histBox" })}
+    ${card("Result", `<div id="resultMsg"></div><div class="progress hidden" id="prog"><i></i></div><div id="result"><p class="hint">Chưa chạy lần nào trong phiên này. Chỉnh tham số rồi bấm <b>Run backtest</b>.</p></div>`, { wide: true, id: "resultBox" })}
+    ${card("Recent runs", `<div id="hist"><p class="hint">Chưa có.</p></div>`, { wide: true, id: "histBox" })}
     <div class="actionbar wide">
-      <button class="btn primary" id="btnRun" type="button">Chạy backtest</button>
-      <button class="btn danger" id="btnApply" type="button">Áp dụng cho bot</button>
+      <button class="btn primary" id="btnRun" type="button">Run backtest</button>
+      <button class="btn danger" id="btnApply" type="button">Apply to bot</button>
     </div>
   </div>`;
   syncInputs();
@@ -117,9 +117,9 @@ function syncInputs() {
   }
   const isLive = sameParams(S.schema.params, S.values, S.schema.live);
   const b = $("#btnApply", root);
-  if (b) { b.disabled = isLive || S.running; b.textContent = isLive ? "Bot đang dùng đúng bộ này" : "Áp dụng cho bot"; }
+  if (b) { b.disabled = isLive || S.running; b.textContent = isLive ? "Same as live" : "Apply to bot"; b.title = isLive ? "Bot đang dùng đúng bộ tham số này" : "Ghi tham số vào bot đang chạy (có hộp xác nhận)"; }
   const run = $("#btnRun", root);
-  if (run) { run.disabled = S.running; run.textContent = S.running ? "Đang chạy…" : "Chạy backtest"; }
+  if (run) { run.disabled = S.running; run.textContent = S.running ? "Running…" : "Run backtest"; }
 }
 
 function paintBot() {
@@ -132,16 +132,16 @@ function paintBot() {
   const m = modeInfo(s.mode);
   const coins = (s.pairs || []).map((p) => `<span class="coinchip">${esc(p.split("/")[0])}</span>`).join("");
   box.innerHTML = `<dl class="info">
-    <dt>Tài khoản</dt><dd><span class="pill ${m.cls}">${esc(m.name)}</span> <span class="hint">${esc(m.help)}</span></dd>
-    <dt>Chiến lược</dt><dd>${esc(s.strategy)} · nến ${esc(s.timeframe)} · tối đa ${esc(s.max_open_trades)} lệnh cùng lúc · ${s.state === "running" ? "đang chạy" : esc(s.state)}</dd>
-    <dt>Coin</dt><dd>${coins}</dd>
-    <dt>Đang mở</dt><dd>${esc(s.open_trades)} lệnh · lãi/lỗ tổng <span class="${cls(s.profit_pct)}">${signedPct(s.profit_pct)}</span></dd>
+    <dt>Account</dt><dd><span class="pill ${m.cls}">${esc(m.name)}</span> <span class="hint">${esc(m.help)}</span></dd>
+    <dt>Strategy</dt><dd>${esc(s.strategy)} · ${esc(s.timeframe)} · max ${esc(s.max_open_trades)} open · ${esc(s.state)}</dd>
+    <dt>Pairs</dt><dd>${coins}</dd>
+    <dt>Open</dt><dd>${esc(s.open_trades)} · P&L <span class="${cls(s.profit_pct)}">${signedPct(s.profit_pct)}</span></dd>
   </dl>
-  <p class="hint">Backtest chạy bằng freqtrade trên máy chủ, đúng các coin và nến trên, khớp lệnh theo nến 15m. Nến có tới ngày nào: xem màn <a href="#data">Dữ liệu</a>.</p>`;
+  <p class="hint">Backtest chạy bằng freqtrade trên máy chủ, đúng các coin và nến trên, khớp lệnh theo nến 15m. Nến có tới ngày nào: xem màn <a href="#data">Data</a>.</p>`;
 }
 
 function equity(r) {
-  return lineChart(r.equity, { label: "Đường vốn backtest", fmtY: (v) => money(v, r.stake_currency || "USDT", 0), fmtX: (v) => isoDay(v) });
+  return lineChart(r.equity, { label: "Backtest equity", fmtY: (v) => money(v, r.stake_currency || "USDT", 0), fmtX: (v) => isoDay(v) });
 }
 
 function findBaseline(run) {
@@ -158,8 +158,8 @@ function paintResult() {
   if (!run) return;
   const r = run.result, cur = r.stake_currency || "USDT";
   const prev = findBaseline(run);
-  const delta = (k, d = 2) => (prev ? `<small class="${cls(r[k] - prev.result[k])}">${signed(r[k] - prev.result[k], d)} so lần trước</small>` : "");
-  const ddDelta = prev ? `<small class="${cls(prev.result.max_dd_pct - r.max_dd_pct)}">${signed(r.max_dd_pct - prev.result.max_dd_pct, 1)} so lần trước</small>` : "";
+  const delta = (k, d = 2) => (prev ? `<small class="${cls(r[k] - prev.result[k])}">${signed(r[k] - prev.result[k], d)} vs. prev</small>` : "");
+  const ddDelta = prev ? `<small class="${cls(prev.result.max_dd_pct - r.max_dd_pct)}">${signed(r.max_dd_pct - prev.result.max_dd_pct, 1)} vs. prev</small>` : "";
   const k = (label, val, c = "", sub = "") => `<div class="kpi"><span class="kpi-label">${esc(label)}</span><b class="kpi-value ${c}">${val}</b>${sub}</div>`;
   const years = (r.years || []).map((y) => `<tr><td>${esc(y.year)}</td><td>${y.trades}</td><td class="${cls(y.profit_abs)}">${signed(y.profit_abs, 0)}</td><td>${y.profit_factor ? fmt(y.profit_factor) : "–"}</td></tr>`).join("");
   const pairs = (r.pairs || []).map((p) => `<tr><td>${esc(p.pair.split("/")[0])}</td><td>${p.trades}</td><td class="${cls(p.profit_abs)}">${signed(p.profit_abs, 0)}</td><td class="${cls(p.profit_pct)}">${signedPct(p.profit_pct)}</td><td>${p.profit_factor ? fmt(p.profit_factor) : "–"}</td><td>${p.trades ? pct(p.winrate_pct, 0) : "–"}</td></tr>`).join("");
@@ -168,16 +168,16 @@ function paintResult() {
       ${run.detail ? `· khớp lệnh theo nến ${esc(run.detail)}` : "· khớp lệnh theo nến tín hiệu"} · chạy lúc ${esc(dateTime(run.at))}</p>
     ${(run.warnings || []).length ? `<div class="msg warn">${run.warnings.map(esc).join("<br>")}</div>` : ""}
     <div class="kpis three">
-      ${k("Lợi nhuận", signedPct(r.profit_pct), cls(r.profit_pct), delta("profit_pct"))}
-      ${k("Sụt vốn lớn nhất", pct(r.max_dd_pct, 1), "", ddDelta)}
+      ${k("Profit", signedPct(r.profit_pct), cls(r.profit_pct), delta("profit_pct"))}
+      ${k("Max drawdown", pct(r.max_dd_pct, 1), "", ddDelta)}
       ${k("Profit factor", fmt(r.profit_factor), "", prev ? delta("profit_factor") : "")}
-      ${k("Tỉ lệ thắng", pct(r.winrate_pct, 1))}
-      ${k("Lãi kép / năm", signedPct(r.cagr_pct), cls(r.cagr_pct))}
-      ${k("Thị trường (TB coin)", signedPct(r.market_change_pct), cls(r.market_change_pct))}
+      ${k("Win rate", pct(r.winrate_pct, 1))}
+      ${k("CAGR", signedPct(r.cagr_pct), cls(r.cagr_pct))}
+      ${k("Market (avg)", signedPct(r.market_change_pct), cls(r.market_change_pct))}
     </div>
     ${equity(r)}
-    <div class="tablewrap"><table><thead><tr><th>Năm</th><th>Lệnh</th><th>Lãi/lỗ (${esc(cur)})</th><th>PF</th></tr></thead><tbody>${years || `<tr><td colspan="4">Không có</td></tr>`}</tbody></table></div>
-    ${pairs ? `<div class="tablewrap" style="margin-top:10px"><table><thead><tr><th>Coin</th><th>Lệnh</th><th>Lãi/lỗ (${esc(cur)})</th><th>% vốn</th><th>PF</th><th>Thắng</th></tr></thead><tbody>${pairs}</tbody></table></div>` : ""}
+    <div class="tablewrap"><table><thead><tr><th>Year</th><th>Trades</th><th>P&L (${esc(cur)})</th><th>PF</th></tr></thead><tbody>${years || `<tr><td colspan="4" class="hint">Không có</td></tr>`}</tbody></table></div>
+    ${pairs ? `<div class="tablewrap" style="margin-top:10px"><table><thead><tr><th>Coin</th><th>Trades</th><th>P&L (${esc(cur)})</th><th>%</th><th>PF</th><th>Win</th></tr></thead><tbody>${pairs}</tbody></table></div>` : ""}
     <p class="hint">PF "–" = coin không có lệnh lỗ. Kết quả quá khứ không bảo đảm tương lai.</p>
     ${!sameParams(S.schema.params, run.params, S.values) ? note("Tham số trên form đã đổi sau lần chạy này — chạy lại trước khi áp dụng.", "warn") : ""}`;
 }
@@ -189,9 +189,9 @@ function paintHistory() {
   box.innerHTML = S.history.map((x, i) => {
     const d = diffParams(S.schema.params, S.schema.live, x.params);
     return `<div class="hist"><div class="top"><span>${esc(x.result.timerange)} · ${esc(dateTime(x.at))}</span>
-      <span><b class="${cls(x.result.profit_pct)}">${signedPct(x.result.profit_pct)}</b> · DD ${pct(x.result.max_dd_pct, 1)} · PF ${fmt(x.result.profit_factor)} · ${x.result.trades} lệnh</span></div>
+      <span><b class="${cls(x.result.profit_pct)}">${signedPct(x.result.profit_pct)}</b> · DD ${pct(x.result.max_dd_pct, 1)} · PF ${fmt(x.result.profit_factor)} · ${x.result.trades} trades</span></div>
       <div class="diff">${d.length ? esc(d.map((c) => `${c.label}: ${c.from} → ${c.to}`).join(" · ")) : "Giống tham số bot đang chạy"}</div>
-      <div><button class="btn sm" type="button" data-hist="${i}">Dùng bộ tham số này</button></div></div>`;
+      <div><button class="btn sm" type="button" data-hist="${i}" title="Nạp bộ tham số này lên form">Use params</button></div></div>`;
   }).join("");
 }
 
@@ -274,12 +274,12 @@ async function openConfirm() {
   const d = diffParams(S.schema.params, S.schema.live, S.values);
   const tested = S.lastRun && sameParams(S.schema.params, S.lastRun.params, S.values);
   const m = modeInfo(S.bot?.mode);
-  const html = `<p>Tài khoản: <span class="pill ${m.cls}">${esc(m.name)}</span>${S.bot?.strategy ? ` · ${esc(S.bot.strategy)}` : ""}</p>
+  const html = `<p><span class="pill ${m.cls}">${esc(m.name)}</span>${S.bot?.strategy ? ` · ${esc(S.bot.strategy)}` : ""}</p>
     <p class="hint">Bot nạp lại chiến lược ngay. Lệnh đang mở giữ stoploss ban đầu; luật thoát dùng tham số mới.</p>
     <ul class="plain">${d.map((c) => `<li><b>${esc(c.label)}</b>: ${esc(c.from)} → <b>${esc(c.to)}</b></li>`).join("")}</ul>
     ${tested ? note(`Đã backtest bộ này: ${signedPct(S.lastRun.result.profit_pct)}, DD ${pct(S.lastRun.result.max_dd_pct, 1)} (${esc(S.lastRun.result.timerange)}).`, "ok")
              : note("Bộ tham số này CHƯA được backtest trong phiên này. Nên chạy backtest trước.", "warn")}`;
-  const ok = await confirm({ title: m.cls === "mode-live" ? "Áp dụng cho bot TIỀN THẬT?" : "Áp dụng cho bot?", html, ok: "Áp dụng", danger: true });
+  const ok = await confirm({ title: m.cls === "mode-live" ? "Apply to LIVE bot?" : "Apply to bot?", html, ok: "Apply", danger: true });
   if (!ok) return;
   const top = $("#topMsg", root);
   try {

@@ -42,19 +42,20 @@ test("ngày giờ, trước đây, độ dài", () => {
   assert.equal(f.ago(t - 3 * 60000, t), "3 phút trước");
   assert.equal(f.ago(t - 2 * 3600e3, t), "2 giờ trước");
   assert.equal(f.ago(t - 4 * 86400e3, t), "4 ngày trước");
-  assert.equal(f.duration(45 * 60000), "45 phút");
-  assert.equal(f.duration(3 * 3600e3), "3 giờ");
-  assert.equal(f.duration((2 * 24 + 4) * 3600e3), "2 ngày 4 giờ");
+  assert.equal(f.duration(45 * 60000), "45m");
+  assert.equal(f.duration(3 * 3600e3), "3h");
+  assert.equal(f.duration((2 * 24 + 4) * 3600e3), "2d 4h");
   assert.equal(f.duration(-1), "–");
 });
 
 test("coin, chiều, lý do thoát, chế độ", () => {
   assert.equal(f.coin("BTC/USDT:USDT"), "BTC");
   assert.equal(f.side(true), "Short");
-  assert.equal(f.exitReason("exit_signal"), "Tín hiệu thoát");
-  assert.equal(f.exitReason("stop_loss"), "Chạm stop");
+  assert.equal(f.exitReason("exit_signal"), "Signal");
+  assert.equal(f.exitReason("stop_loss"), "Stop loss");
   assert.equal(f.exitReason("weird"), "weird");
-  assert.equal(f.modeInfo("live").name, "TIỀN THẬT");
+  assert.equal(f.modeInfo("live").name, "LIVE");
+  assert.equal(f.modeInfo("TIỀN THẬT").cls, "mode-live");        // tên cũ hub trả về vẫn hiểu
   assert.equal(f.modeInfo("Demo").cls, "mode-demo");          // tên trong /api/tune/live cũng hiểu
   assert.equal(f.modeInfo("dry-run").cls, "mode-paper");
   assert.equal(f.modeInfo(undefined).cls, "mode-unknown");

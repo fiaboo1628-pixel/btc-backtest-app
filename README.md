@@ -9,24 +9,24 @@ Repo gồm hai phần:
 
 ## App: bot đang làm gì, tiền thế nào, có gì cần làm
 
-Giao diện tiếng Việt, 5 màn hình, thanh tab dưới cùng:
+Nhãn, tiêu đề, nút dùng tiếng Anh ngắn gọn; giải thích, thông báo, cảnh báo và log bằng tiếng Việt. 5 màn hình, thanh tab dưới cùng; thanh tiêu đề có nút tải lại và sáng/tối:
 
 | Màn | Trả lời câu hỏi | Nguồn |
 |---|---|---|
-| **Tổng quan** | Chế độ (Dry-run / Demo / **TIỀN THẬT**, màu khác nhau), bot đang chạy hay đã dừng / tự dừng vì sụt vốn / không xử lý nến; vốn, lãi lỗ hôm nay + tổng, sụt vốn so với ngưỡng tự dừng 15%; lệnh đang mở (coin, chiều, lãi lỗ, giá stop, stop có trên sàn không); đường vốn; lãi lỗ theo ngày; cảnh báo trong log bot | `/api/live` (15 s/lần khi app đang hiện) |
-| **Lệnh** | Mọi lệnh đã đóng, lọc theo coin; số lệnh, thắng, profit factor; so với kỳ vọng nghiên cứu (~19 lệnh/tháng, thắng 32%, PF 1,55) | `/api/trades` |
-| **Backtest** | Chỉnh tham số chiến lược (nhãn tiếng Việt, giới hạn từ chính class chiến lược), chọn khoảng thời gian và vốn thử, chạy backtest **bằng freqtrade ở LAB** (khớp lệnh theo nến 15m), kết quả tóm tắt + theo năm + theo coin + đường vốn, lịch sử các lần thử, **Áp dụng cho bot** với hộp xác nhận ghi rõ giá trị cũ → mới và tài khoản nào | `/api/tune/*` |
-| **Dữ liệu** | Nến LAB có coin nào, khung nào, từ ngày nào tới ngày nào, hub tự cập nhật lúc nào, đang tải không, lỗi gì | `/api/tune/live` |
-| **Cảnh báo** | Bật/tắt thông báo đẩy tới máy này, gửi thử, kênh đang có (điện thoại, Telegram), sự cố đang báo, cảnh báo gần đây, báo cáo tuần; cuối trang: giao diện sáng/tối, phiên bản, tải lại app | `/api/push/*`, `/api/alerts`, `/api/weekly` |
+| **Overview** | Chế độ (Dry-run / Demo / **LIVE**, màu khác nhau), bot đang chạy hay đã dừng / tự dừng vì sụt vốn / không xử lý nến; vốn, lãi lỗ hôm nay + tổng, sụt vốn so với ngưỡng tự dừng 15%; lệnh đang mở (coin, chiều, lãi lỗ, giá stop, stop có trên sàn không); đường vốn; lãi lỗ theo ngày; cảnh báo trong log bot | `/api/live` (15 s/lần khi app đang hiện) |
+| **Trades** | Mọi lệnh đã đóng, lọc theo coin; số lệnh, thắng, profit factor; so với kỳ vọng nghiên cứu (~19 lệnh/tháng, thắng 32%, PF 1,55) | `/api/trades` |
+| **Backtest** | Chỉnh tham số chiến lược (nhãn ngắn + giải thích tiếng Việt, giới hạn từ chính class chiến lược), chọn khoảng thời gian và vốn thử, chạy backtest **bằng freqtrade ở LAB** (khớp lệnh theo nến 15m), kết quả tóm tắt + theo năm + theo coin + đường vốn, lịch sử các lần thử, **Apply to bot** với hộp xác nhận ghi rõ giá trị cũ → mới và tài khoản nào | `/api/tune/*` |
+| **Data** | Nến LAB có coin nào, khung nào, từ ngày nào tới ngày nào, hub tự cập nhật lúc nào, đang tải không, lỗi gì | `/api/tune/live` |
+| **Alerts** | Công tắc thông báo đẩy tới máy này (nút gửi thử), kênh đang có (điện thoại, Telegram), sự cố đang báo, cảnh báo gần đây, báo cáo tuần; cuối trang: phiên bản, tải lại app | `/api/push/*`, `/api/alerts`, `/api/weekly` |
 
 Không có backtest chạy trong trình duyệt: số duy nhất đáng tin là freqtrade ở LAB (app cũ có bộ máy JS riêng, lệch freqtrade ở SOL/DOGE vì bảng bước khối lượng — đã bỏ).
 
 <p>
-<img src="docs/screenshots/demo-390-dark-overview.png" width="180" alt="Tổng quan">
-<img src="docs/screenshots/demo-390-dark-trades.png" width="180" alt="Lịch sử lệnh">
+<img src="docs/screenshots/demo-390-dark-overview.png" width="180" alt="Overview">
+<img src="docs/screenshots/demo-390-dark-trades.png" width="180" alt="Trades">
 <img src="docs/screenshots/demo-390-dark-backtest.png" width="180" alt="Backtest">
-<img src="docs/screenshots/demo-390-dark-data.png" width="180" alt="Dữ liệu">
-<img src="docs/screenshots/demo-390-dark-alerts.png" width="180" alt="Cảnh báo">
+<img src="docs/screenshots/demo-390-dark-data.png" width="180" alt="Data">
+<img src="docs/screenshots/demo-390-dark-alerts.png" width="180" alt="Alerts">
 </p>
 
 Ảnh thêm (PC, các trạng thái tự dừng / tiền thật / mất bot / chưa có lệnh): [`docs/screenshots/`](docs/screenshots/).

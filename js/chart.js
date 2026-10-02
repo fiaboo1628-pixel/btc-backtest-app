@@ -5,7 +5,7 @@ import { esc } from "./ui.js";
  * Đường vốn. points: [[x, y], ...] (x tăng dần). opts: {w, h, label, fmtY, fmtX}
  * Tô màu xanh/đỏ theo cuối so với đầu; vạch đứt ở mức ban đầu; ghi min/max.
  */
-export function lineChart(points, { w = 600, h = 140, label = "Đường vốn", fmtY = (v) => v, fmtX = (v) => v } = {}) {
+export function lineChart(points, { w = 600, h = 140, label = "Equity", fmtY = (v) => v, fmtX = (v) => v } = {}) {
   const pts = (points || []).filter((p) => p && Number.isFinite(p[1]));
   if (pts.length < 2) return `<div class="chart-empty">Chưa đủ dữ liệu để vẽ (cần ≥ 2 điểm).</div>`;
   const padL = 6, padR = 6, padT = 14, padB = 18;
@@ -42,10 +42,10 @@ export function barChart(days, { w = 600, h = 110, cur = "USDT", fmt = (v) => v,
   const bars = list.map((d, i) => {
     const v = d.abs || 0, bh = (Math.abs(v) / maxAbs) * (mid - 4);
     const x = i * (w / list.length) + 1, y = v >= 0 ? mid - bh : mid;
-    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(bh, 1).toFixed(1)}" class="${v > 0 ? "bup" : v < 0 ? "bdown" : "bzero"}"><title>${esc(fmtDay(d.date))}: ${esc(fmt(v))} ${esc(cur)} · ${d.trades ?? 0} lệnh</title></rect>`;
+    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(bh, 1).toFixed(1)}" class="${v > 0 ? "bup" : v < 0 ? "bdown" : "bzero"}"><title>${esc(fmtDay(d.date))}: ${esc(fmt(v))} ${esc(cur)} · ${d.trades ?? 0} trades</title></rect>`;
   }).join("");
   const total = list.reduce((s, d) => s + (d.abs || 0), 0);
-  return `<svg class="chart bars" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Lãi/lỗ theo ngày, ${list.length} ngày, tổng ${esc(fmt(total))} ${esc(cur)}">
+  return `<svg class="chart bars" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Daily P&L, ${list.length} ngày, tổng ${esc(fmt(total))} ${esc(cur)}">
     <line x1="0" x2="${w}" y1="${mid}" y2="${mid}" class="baseline"/>${bars}
     <text x="0" y="${h - 3}" class="lbl muted">${esc(fmtDay(list[0].date))}</text>
     <text x="${w}" y="${h - 3}" class="lbl muted" text-anchor="end">${esc(fmtDay(list.at(-1).date))}</text>

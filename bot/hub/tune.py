@@ -21,33 +21,33 @@ from pydantic import BaseModel
 
 DETAIL_TF = "15m"              # nến chi tiết để khớp lệnh trong nến tín hiệu (--timeframe-detail)
 
-# Nhãn tiếng Việt cho từng tham số. Tham số nào không có ở đây vẫn hiện, với tên gốc.
+# Nhãn ngắn (tiếng Anh, hiện trên form) + giải thích tiếng Việt cho từng tham số. Tham số nào không có ở đây vẫn hiện, với tên gốc.
 LABELS: dict[str, tuple[str, str]] = {
     # TrendBreakout
-    "entry_period": ("Kênh vào lệnh (số nến)", "Long khi đóng cửa trên đỉnh, Short khi dưới đáy của ngần này nến trước."),
-    "ema_filter": ("Lọc EMA200", "Chỉ Long khi giá trên EMA200, chỉ Short khi dưới."),
-    "exit_period": ("Kênh thoát lệnh (số nến)", "Thoát khi đóng cửa thủng đáy (Long) / vượt đỉnh (Short) của ngần này nến."),
-    "fixed_lev": ("Đòn bẩy cố định", "Bật: luôn dùng đòn bẩy tối đa để ký quỹ mỗi lệnh nhỏ (rủi ro/lệnh không đổi). "
+    "entry_period": ("Entry channel (bars)", "Long khi đóng cửa trên đỉnh, Short khi dưới đáy của ngần này nến trước."),
+    "ema_filter": ("EMA200 filter", "Chỉ Long khi giá trên EMA200, chỉ Short khi dưới."),
+    "exit_period": ("Exit channel (bars)", "Thoát khi đóng cửa thủng đáy (Long) / vượt đỉnh (Short) của ngần này nến."),
+    "fixed_lev": ("Fixed leverage", "Bật: luôn dùng đòn bẩy tối đa để ký quỹ mỗi lệnh nhỏ (rủi ro/lệnh không đổi). "
                                      "Nên bật khi chạy nhiều coin."),
     # DonchianRevert
-    "dc_period": ("Chu kỳ kênh Donchian", "Số nến 15m để tính đỉnh/đáy kênh."),
-    "dc_long": ("Ngưỡng Long", "Vào Long khi vị trí giá trong kênh ≤ ngưỡng này (0 = đáy kênh)."),
-    "dc_short": ("Ngưỡng Short", "Vào Short khi vị trí giá trong kênh ≥ ngưỡng này (1 = đỉnh kênh)."),
-    "adx_min": ("ADX tối thiểu", "Chỉ vào lệnh khi ADX(14) lớn hơn mức này."),
-    "vol_max": ("Volume tối đa (× TB 24h)", "Bỏ qua khi volume cao hơn mức này — tránh bán tháo/mua đuổi."),
-    "atr_min_pct": ("ATR tối thiểu (% giá)", "Chỉ vào lệnh khi biến động đủ lớn (phí chỉ là phần nhỏ của R)."),
-    "short_enabled": ("Cho phép Short", "Tắt để chỉ đánh Long."),
-    "r_atr": ("Độ rộng stoploss (× ATR)", "1R = stoploss ban đầu = hệ số này × ATR của nến tín hiệu."),
-    "trail_start_r": ("Kích hoạt trailing tại (R)", "Lãi chạm mức này (tính theo R) thì bật trailing."),
-    "trail_dist_r": ("Khoảng trailing (R)", "Trailing bám đỉnh/đáy, cách một khoảng bằng ngần này R."),
-    "trail_on": ("Bật trailing", "Tắt để chỉ còn SL ban đầu (và TP nếu có)."),
-    "tp_r": ("Chốt lời cố định (R)", "Chốt lời khi lãi đạt ngần này R; 0 = tắt."),
-    "risk_pct": ("Rủi ro mỗi lệnh (% vốn)", "Số % vốn mất nếu lệnh dính stoploss ban đầu."),
-    "max_lev": ("Đòn bẩy tối đa", "Giới hạn đòn bẩy khi tính khối lượng theo rủi ro."),
-    "halt_on": ("Tự dừng khi thua nhiều", "Ngừng vào lệnh mới khi sụt vốn > 15%. Đã dừng thì tắt để chạy tiếp "
+    "dc_period": ("Donchian period", "Số nến 15m để tính đỉnh/đáy kênh."),
+    "dc_long": ("Long threshold", "Vào Long khi vị trí giá trong kênh ≤ ngưỡng này (0 = đáy kênh)."),
+    "dc_short": ("Short threshold", "Vào Short khi vị trí giá trong kênh ≥ ngưỡng này (1 = đỉnh kênh)."),
+    "adx_min": ("Min ADX", "Chỉ vào lệnh khi ADX(14) lớn hơn mức này."),
+    "vol_max": ("Max volume (× 24h avg)", "Bỏ qua khi volume cao hơn mức này — tránh bán tháo/mua đuổi."),
+    "atr_min_pct": ("Min ATR (% price)", "Chỉ vào lệnh khi biến động đủ lớn (phí chỉ là phần nhỏ của R)."),
+    "short_enabled": ("Allow short", "Tắt để chỉ đánh Long."),
+    "r_atr": ("Stop width (× ATR)", "1R = stoploss ban đầu = hệ số này × ATR của nến tín hiệu."),
+    "trail_start_r": ("Trailing start (R)", "Lãi chạm mức này (tính theo R) thì bật trailing."),
+    "trail_dist_r": ("Trailing distance (R)", "Trailing bám đỉnh/đáy, cách một khoảng bằng ngần này R."),
+    "trail_on": ("Trailing stop", "Tắt để chỉ còn SL ban đầu (và TP nếu có)."),
+    "tp_r": ("Take profit (R)", "Chốt lời khi lãi đạt ngần này R; 0 = tắt."),
+    "risk_pct": ("Risk per trade (%)", "Số % vốn mất nếu lệnh dính stoploss ban đầu."),
+    "max_lev": ("Max leverage", "Giới hạn đòn bẩy khi tính khối lượng theo rủi ro."),
+    "halt_on": ("Auto-halt", "Ngừng vào lệnh mới khi sụt vốn > 15%. Đã dừng thì tắt để chạy tiếp "
                                           "(sau khi xem lại)."),
 }
-SPACE_TITLES = {"buy": "Vào lệnh", "sell": "Thoát lệnh & rủi ro"}
+SPACE_TITLES = {"buy": "Entry", "sell": "Exit & risk"}
 
 
 def load_schema(strategy_file: Path, class_name: str) -> list[dict]:

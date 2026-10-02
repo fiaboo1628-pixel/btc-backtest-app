@@ -1,6 +1,6 @@
 // Service worker: lưu sẵn vỏ app (HTML, CSS, JS, icon) để mở nhanh và mở được khi mất mạng.
 // Dữ liệu (/api/...) KHÔNG bao giờ cache — luôn lấy mới từ hub. Đổi CACHE mỗi lần phát hành (cùng js/version.js).
-const CACHE = "bot-app-2026.10.02";
+const CACHE = "bot-app-2026.10.03";
 const SHELL = [
   "./", "index.html", "manifest.webmanifest", "css/app.css", "icons/icon.svg", "icons/icon-192.png",
   "js/app.js", "js/api.js", "js/format.js", "js/model.js", "js/ui.js", "js/chart.js", "js/version.js",

@@ -5,11 +5,31 @@ export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&a
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
-/** Thẻ nội dung. opts: {id, cls, wide (chiếm cả hàng trên PC), hint (chữ nhỏ cạnh tiêu đề)}. */
-export function card(title, body, { id = "", cls = "", wide = false, hint = "" } = {}) {
+/** Thẻ nội dung. opts: {id, cls, wide (chiếm cả hàng trên PC), hint (chữ nhỏ cạnh tiêu đề), tools (HTML nút icon bên phải tiêu đề)}. */
+export function card(title, body, { id = "", cls = "", wide = false, hint = "", tools = "" } = {}) {
   return `<section class="card ${wide ? "wide" : ""} ${cls}" ${id ? `id="${id}"` : ""}>
-    ${title ? `<h2>${esc(title)}${hint ? ` <span class="hint">${esc(hint)}</span>` : ""}</h2>` : ""}${body}</section>`;
+    ${title ? `<h2>${esc(title)}${hint ? ` <span class="hint">${esc(hint)}</span>` : ""}${tools ? `<span class="tools">${tools}</span>` : ""}</h2>` : ""}${body}</section>`;
 }
+
+/** Nút chỉ có icon (36px). name: refresh | send | play | off | reload | chevron | download. title = tooltip tiếng Việt. */
+export function ibtn(name, { title = "", data = "", cls = "", disabled = false, id = "" } = {}) {
+  return `<button class="ibtn ${cls}" type="button" ${id ? `id="${id}"` : ""} ${data} title="${esc(title)}" aria-label="${esc(title)}" ${disabled ? "disabled" : ""}>${ICONS[name] || ""}</button>`;
+}
+const svg = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
+export const ICONS = {
+  refresh: svg('<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/>'),
+  send: svg('<path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/>'),
+  play: svg('<path d="M6 4l14 8-14 8z"/>'),
+  reload: svg('<path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/>'),
+  phone: svg('<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/>'),
+  bell: svg('<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0"/>'),
+  tg: svg('<path d="M21 4L3 11l6 2 2 6 3-4 5 4z"/><path d="M9 13l10-9"/>'),
+  shield: svg('<path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/>'),
+  user: svg('<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>'),
+  tag: svg('<path d="M3 3h8l10 10-8 8L3 11z"/><circle cx="8" cy="8" r="1.5"/>'),
+  doc: svg('<path d="M6 2h8l5 5v15H6z"/><path d="M14 2v5h5M9 13h6M9 17h6"/>'),
+  warn: svg('<path d="M12 3l10 18H2z"/><path d="M12 10v4M12 18h.01"/>'),
+};
 
 /** Ô số: nhãn nhỏ + số to (+ dòng phụ). value đã là HTML an toàn. */
 export function kpi(label, value, { cls = "", sub = "" } = {}) {
@@ -26,7 +46,7 @@ export function errorBox(err, { retry = "", title = "" } = {}) {
     <p class="err-title">${esc(title || (e.kind === "offline" ? "Không kết nối được" : "Có lỗi"))}</p>
     <p>${esc(e.message)}</p>
     ${e.hint ? `<p class="hint">${esc(e.hint)}</p>` : ""}
-    ${retry ? `<button class="btn sm" type="button" data-retry="${esc(retry)}">Thử lại</button>` : ""}
+    ${retry ? `<button class="btn sm" type="button" data-retry="${esc(retry)}">Retry</button>` : ""}
   </div>`;
 }
 
@@ -46,9 +66,9 @@ export function toast(text, kind = "info", ms = 4000) {
 
 /**
  * Hộp xác nhận. html là nội dung (đã escape). Trả về Promise<boolean>.
- * {title, html, ok = "Đồng ý", cancel = "Huỷ", danger = false}
+ * {title, html, ok = "OK", cancel = "Cancel", danger = false}
  */
-export function confirm({ title, html, ok = "Đồng ý", cancel = "Huỷ", danger = false }) {
+export function confirm({ title, html, ok = "OK", cancel = "Cancel", danger = false }) {
   const dlg = $("#confirm");
   if (!dlg) return Promise.resolve(window.confirm(title));
   $("#confirmTitle", dlg).textContent = title;

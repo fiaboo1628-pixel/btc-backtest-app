@@ -61,7 +61,7 @@ const schema = [
 test("so hai bộ tham số, ép đúng bước", () => {
   const live = { entry_period: 20, r_atr: 2, halt_on: true };
   const d = m.diffParams(schema, live, { entry_period: 25, r_atr: 2, halt_on: false });
-  assert.deepEqual(d, [{ name: "entry_period", label: "Kênh vào lệnh", from: 20, to: 25 }, { name: "halt_on", label: "Tự dừng", from: "bật", to: "tắt" }]);
+  assert.deepEqual(d, [{ name: "entry_period", label: "Kênh vào lệnh", from: 20, to: 25 }, { name: "halt_on", label: "Tự dừng", from: "on", to: "off" }]);
   assert.equal(m.sameParams(schema, live, { ...live }), true);
   assert.equal(m.sameParams(schema, live, { ...live, r_atr: 2.5 }), false);
   assert.equal(m.clampParam(schema[0], 150), 100);
