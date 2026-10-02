@@ -28,3 +28,9 @@ journalctl -u tailscaled -b --no-pager | tail -40
 journalctl -t tailscale-watchdog --no-pager | tail
 last -x | head                                  # có khởi động lại / ngủ không
 ```
+
+## Deploy bản mới
+
+Merge PR trên GitHub rồi, từ PC: `deploy` (hoặc `deploy 45` = merge PR #45 rồi deploy; thêm `hub|live|all` để ép restart).
+Hàm fish `deploy` gọi `ssh sever@server sh btc-backtest-app/bot/deploy/server/deploy.sh`: `git pull`, chỉ restart phần có mã đổi
+(`bot/hub/` → hub; chiến lược / `config*.json` → live; `docker-compose.yml` → `up -d hub lab live`; app tĩnh chỉ pull).
