@@ -4,6 +4,7 @@ import { api } from "./api.js";
 import { modeInfo } from "./format.js";
 import { $, $$, esc, toast } from "./ui.js";
 import { APP_VERSION } from "./version.js";
+import { initBell } from "./push.js";
 import * as overview from "./views/overview.js";
 import * as trades from "./views/trades.js";
 import * as backtest from "./views/backtest.js";
@@ -46,7 +47,8 @@ function paintHeader() {
   if (!s) { pill.hidden = true; return; }
   pill.hidden = false;
   if (!s.reachable || store.failedSince) {
-    pill.className = "pill mode-off"; pill.textContent = store.failedSince ? "Mất liên lạc" : "Bot offline";
+    pill.className = "pill mode-off"; pill.textContent = store.failedSince ? "Disconnected" : "Offline";
+    pill.title = store.failedSince ? "Hub không trả lời" : "Hub không liên lạc được bot";
     return;
   }
   const m = modeInfo(s.mode);
@@ -79,6 +81,15 @@ function route() {
   mod.mount(root, ctx);
 }
 
+/** Nút tải lại ở thanh tiêu đề: gọi refresh() của màn đang mở (và /api/live nếu có). */
+let spinTimer = null;
+function refreshNow() {
+  const b = $("#btnRefresh");
+  b.classList.add("spin"); clearTimeout(spinTimer); spinTimer = setTimeout(() => b.classList.remove("spin"), 900);
+  if (store.hub?.features?.live) pollLive(true);
+  current?.mod.refresh?.();
+}
+
 // ---------------------------------------------------------------- mạng
 function paintNet() {
   const b = $("#netBanner");
@@ -96,7 +107,16 @@ export function applyTheme(t) {
   if (v === "system") delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = v;
   const dark = v === "dark" || (v === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+  document.documentElement.dataset.dark = dark ? "1" : "0";
   $("#themeColor")?.setAttribute("content", dark ? "#0b0d12" : "#f3f5f9");
+  const b = $("#btnTheme");
+  if (b) b.title = v === "system" ? "Giao diện theo máy — bấm để đổi sáng/tối" : v === "dark" ? "Đang tối — bấm để chuyển sáng" : "Đang sáng — bấm để chuyển tối";
+}
+/** Nút ở thanh tiêu đề: đảo sáng ↔ tối (lưu lựa chọn). */
+function toggleTheme() {
+  const dark = document.documentElement.dataset.dark === "1";
+  const v = dark ? "light" : "dark";
+  localStorage.setItem("theme", v); applyTheme(v);
 }
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => applyTheme());
 ctx.applyTheme = applyTheme;
@@ -124,11 +144,13 @@ async function init() {
     const b = e.target.closest("[data-retry]");
     if (b) current?.mod.refresh?.(b.dataset.retry);
   });
+  $("#btnRefresh").addEventListener("click", refreshNow);
+  $("#btnTheme").addEventListener("click", toggleTheme);
   window.addEventListener("hashchange", route);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { pollLive(); current?.mod.refresh?.("visible"); } });
   try {
     store.hub = await api("/api/hub");
-    $("#user").textContent = store.hub.user ? `Đăng nhập: ${store.hub.user}` : "";
+    $("#user").textContent = store.hub.user || "";
   } catch (e) {
     store.hub = { features: {}, error: e };
   }
@@ -140,5 +162,6 @@ async function init() {
     store.live = null; store.emit();
   }
   registerSw();
+  initBell(api, () => { if (current?.id === "alerts") current.mod.refresh?.(); });
 }
 init();

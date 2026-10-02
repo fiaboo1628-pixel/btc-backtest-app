@@ -82,15 +82,15 @@ export function ago(ms, now = Date.now()) {
   return `${Math.round(s / 86400)} ngày trước`;
 }
 
-/** Độ dài: "45 phút", "3 giờ", "2 ngày 4 giờ". */
+/** Độ dài, gọn kiểu bảng lệnh: "45m", "3h", "2d 4h". */
 export function duration(ms) {
   if (ms == null || ms < 0) return "–";
   const m = Math.round(ms / 60000);
-  if (m < 60) return `${m} phút`;
+  if (m < 60) return `${m}m`;
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h} giờ`;
+  if (h < 24) return `${h}h`;
   const d = Math.floor(h / 24), hr = h % 24;
-  return hr ? `${d} ngày ${hr} giờ` : `${d} ngày`;
+  return hr ? `${d}d ${hr}h` : `${d}d`;
 }
 
 /** "BTC/USDT:USDT" → "BTC". */
@@ -99,21 +99,21 @@ export const coin = (pair) => String(pair || "").split("/")[0] || "–";
 export const side = (isShort) => (isShort ? "Short" : "Long");
 
 const EXIT = {
-  exit_signal: "Tín hiệu thoát", stop_loss: "Chạm stop", stoploss: "Chạm stop", trailing_stop_loss: "Trailing stop",
-  roi: "Chốt lời", force_exit: "Đóng tay", force_sell: "Đóng tay", emergency_exit: "Đóng khẩn cấp",
-  liquidation: "Thanh lý", custom_exit: "Thoát theo luật", partial_exit: "Thoát một phần",
+  exit_signal: "Signal", stop_loss: "Stop loss", stoploss: "Stop loss", trailing_stop_loss: "Trailing stop",
+  roi: "Take profit", force_exit: "Manual", force_sell: "Manual", emergency_exit: "Emergency",
+  liquidation: "Liquidation", custom_exit: "Rule exit", partial_exit: "Partial",
 };
-/** Lý do thoát lệnh của freqtrade → tiếng Việt; không biết thì trả mã gốc. */
+/** Lý do thoát lệnh của freqtrade → nhãn ngắn; không biết thì trả mã gốc. */
 export const exitReason = (code) => (code ? (EXIT[code] || code) : "–");
 
 const MODES = {
   paper: { name: "Dry-run", cls: "mode-paper", help: "Lệnh giả trong bot, không lên sàn, ví ảo." },
   demo: { name: "Demo", cls: "mode-demo", help: "Binance Demo: lệnh đặt thật trên sàn demo, tiền ảo." },
-  live: { name: "TIỀN THẬT", cls: "mode-live", help: "Tiền thật trên Binance." },
+  live: { name: "LIVE", cls: "mode-live", help: "Tiền thật trên Binance." },
 };
-/** Chế độ bot (từ /api/live.mode hoặc tên trong /api/tune/live) → tên, lớp màu, giải thích. */
+/** Chế độ bot (từ /api/live.mode hoặc tên trong /api/tune/live) → tên ngắn, lớp màu, giải thích (tiếng Việt). */
 export function modeInfo(mode) {
-  const key = { "dry-run": "paper", Demo: "demo", "TIỀN THẬT": "live" }[mode] || mode;
+  const key = { "dry-run": "paper", Demo: "demo", "TIỀN THẬT": "live", LIVE: "live" }[mode] || mode;
   return MODES[key] || { name: mode || "?", cls: "mode-unknown", help: "" };
 }
 

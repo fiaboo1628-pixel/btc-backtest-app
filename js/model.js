@@ -21,25 +21,25 @@ export function openPnl(open) {
 const STALE_S = 300;
 
 /**
- * Trạng thái bot để trả lời "bot đang làm gì" bằng một dòng.
+ * Trạng thái bot để trả lời "bot đang làm gì" bằng một dòng: label ngắn (tiếng Anh), detail giải thích (tiếng Việt).
  * kind: offline | halted | stopped | stale | running
  */
 export function botStatus(live, nowS = Date.now() / 1000) {
   if (!live || !live.reachable) {
-    return { kind: "offline", label: "Không liên lạc được bot", detail: live?.error || "" };
+    return { kind: "offline", label: "Offline", detail: live?.error || "Hub không liên lạc được bot." };
   }
   if (live.state !== "running") {
-    return { kind: "stopped", label: "Bot đã dừng", detail: `Trạng thái: ${live.state || "?"} — không vào/thoát lệnh.` };
+    return { kind: "stopped", label: "Stopped", detail: `Trạng thái: ${live.state || "?"} — không vào/thoát lệnh.` };
   }
   if (live.halt?.halted) {
-    return { kind: "halted", label: "Tự dừng vào lệnh mới", detail:
-      `Sụt vốn đã quá ${live.halt.threshold_pct}% — bot giữ lệnh đang mở nhưng không vào lệnh mới. Xem lại rồi tắt "Tự dừng" ở màn Backtest nếu muốn chạy tiếp.` };
+    return { kind: "halted", label: "Halted", detail:
+      `Sụt vốn đã quá ${live.halt.threshold_pct}% — bot giữ lệnh đang mở nhưng không vào lệnh mới. Xem lại rồi tắt "Auto-halt" ở màn Backtest nếu muốn chạy tiếp.` };
   }
   if (live.last_process_ts && nowS - live.last_process_ts > STALE_S) {
     const m = Math.round((nowS - live.last_process_ts) / 60);
-    return { kind: "stale", label: "Bot không xử lý nến", detail: `${m} phút chưa thấy bot làm việc — kiểm tra máy chủ.` };
+    return { kind: "stale", label: "Stale", detail: `${m} phút chưa thấy bot xử lý nến — kiểm tra máy chủ.` };
   }
-  return { kind: "running", label: "Đang chạy", detail: "" };
+  return { kind: "running", label: "Running", detail: "" };
 }
 
 /** Thống kê một nhóm lệnh đã đóng (sau khi lọc theo coin trên màn Lịch sử). */
@@ -89,7 +89,7 @@ export function dataSummary(rows, timeframe) {
   return out;
 }
 
-const show = (p, x) => (p.type === "bool" ? (x ? "bật" : "tắt") : x);
+const show = (p, x) => (p.type === "bool" ? (x ? "on" : "off") : x);
 
 /** Khác nhau giữa hai bộ tham số theo schema: [{name, label, from, to}]. */
 export function diffParams(schema, from, to) {
@@ -116,10 +116,10 @@ export function rangePresets(now = new Date()) {
   const iso = (d) => d.toISOString().slice(0, 10);
   const y1 = new Date(now); y1.setFullYear(y1.getFullYear() - 1);
   return [
-    { id: "all", label: "2021 → nay", from: "2021-01-01", to: "" },
+    { id: "all", label: "2021 → now", from: "2021-01-01", to: "" },
     { id: "is", label: "2021–2024", from: "2021-01-01", to: "2025-01-01" },
-    { id: "oos", label: "2025 → nay", from: "2025-01-01", to: "" },
-    { id: "1y", label: "12 tháng", from: iso(y1), to: "" },
+    { id: "oos", label: "2025 → now", from: "2025-01-01", to: "" },
+    { id: "1y", label: "12M", from: iso(y1), to: "" },
   ];
 }
 
