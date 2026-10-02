@@ -354,6 +354,158 @@ def test_live_unreachable(tmp_path, monkeypatch):
     assert c.get("/api/live", headers=TS).json() == {"reachable": False, "error": "down"}
 
 
+def _bt_result(**extra):
+    return {"strategy": {"TrendBreakout": {
+        "starting_balance": 1000, "daily_profit": [["2025-01-01", 10], ["2025-01-02", -5]],
+        "backtest_start": "2025-01-01 00:00:00", "backtest_end": "2025-12-31 00:00:00", "total_trades": 3,
+        "profit_total": 0.05, "profit_total_abs": 50, "max_drawdown_account": 0.02, "winrate": 2 / 3, "market_change": 0.4,
+        "results_per_pair": [
+            {"key": "SOL/USDT:USDT", "trades": 2, "profit_total_abs": 60, "profit_total": 0.06, "profit_factor": 4.0,
+             "winrate": 0.5, "sharpe": 1.2, "duration_avg": "1 day"},
+            {"key": "BTC/USDT:USDT", "trades": 1, "profit_total_abs": -10, "profit_total": -0.01, "profit_factor": 0.0,
+             "winrate": 0.0},
+            {"key": "TOTAL", "trades": 3, "profit_total_abs": 50, "profit_total": 0.05, "profit_factor": 6.0, "winrate": 2 / 3},
+        ], **extra}}}
+
+
+def test_summarize_per_pair():
+    s = tune.summarize(_bt_result(), "TrendBreakout")
+    assert [p["pair"] for p in s["pairs"]] == ["SOL/USDT:USDT", "BTC/USDT:USDT"]          # bỏ TOTAL, giữ thứ tự freqtrade
+    assert s["pairs"][0] == {"pair": "SOL/USDT:USDT", "trades": 2, "profit_abs": 60, "profit_pct": 6.0,
+                             "profit_factor": 4.0, "winrate_pct": 50.0}                    # chỉ trường cần hiển thị
+    assert s["equity"] == [["2025-01-01", 1010], ["2025-01-02", 1005]] and s["market_change_pct"] == 40
+    assert tune.summarize(_bt_result(results_per_pair=[]), "TrendBreakout")["pairs"] == []
+
+
+def _ranges(monkeypatch, have):
+    """Giả nến LAB: have = {(cặp, khung): (từ, tới)}; không có trong have = chưa có file."""
+    def fake(data_dir, pairs, tfs):
+        return [{"pair": p, "tf": tf, "from": have.get((p, tf), (None, None))[0], "to": have.get((p, tf), (None, None))[1]}
+                for p in pairs for tf in tfs]
+    monkeypatch.setattr(tune, "data_ranges", fake)
+
+
+def test_data_ranges_reads_feather(tmp_path):
+    pd = pytest.importorskip("pandas")
+    pytest.importorskip("pyarrow")
+    pd.DataFrame({"date": pd.to_datetime(["2021-01-01 00:00", "2026-09-30 20:00"], utc=True)}).to_feather(
+        tmp_path / "BTC_USDT_USDT-4h-futures.feather")
+    assert tune.data_ranges(tmp_path, ["BTC/USDT:USDT"], ["4h", "15m"]) == [
+        {"pair": "BTC/USDT:USDT", "tf": "4h", "from": "2021-01-01", "to": "2026-09-30 20:00"},
+        {"pair": "BTC/USDT:USDT", "tf": "15m", "from": None, "to": None}]
+
+
+def _tune_app(tmp_path, monkeypatch, responses, calls, pairs=("BTC/USDT:USDT",)):
+    async def fake_call(self, method, path, **kw):
+        calls.append((method, path, kw.get("json")))
+        return responses.get((method, path), {})
+
+    monkeypatch.setattr(tune.FtClient, "call", fake_call)
+    monkeypatch.setattr(tune, "load_schema", lambda *a: [])
+    bot = tmp_path / "config.base.json"
+    bot.write_text(json.dumps({"timeframe": "4h", "exchange": {"pair_whitelist": list(pairs)}}))
+    lab = {"api_url": "http://x", "username": "u", "password": "p", "strategy_dir": tmp_path / "user_data" / "strategies_lab"}
+    lab["strategy_dir"].mkdir(parents=True)
+    return make_app(tmp_path, strategy="TrendBreakout", lab=lab, live={**lab, "strategy_dir": tmp_path / "s"},
+                    bot_config=str(bot), lab_data_update=False), tmp_path / "user_data" / "data" / "binance" / "futures"
+
+
+def test_backtest_sends_timeframe_detail(tmp_path, monkeypatch):
+    calls = []
+    c, _ = _tune_app(tmp_path, monkeypatch, {("GET", "/show_config"): {"timeframe": "4h"}}, calls)
+    _ranges(monkeypatch, {("BTC/USDT:USDT", "4h"): ("2021-01-01", "2026-09-30 20:00"),
+                          ("BTC/USDT:USDT", "15m"): ("2023-01-01", "2026-09-30 23:45")})
+    r = c.post("/api/tune/backtest", json={"params": {}, "timerange": "20220101-"}, headers=TS)
+    assert r.status_code == 200, r.text
+    post = [j for m, p, j in calls if (m, p) == ("POST", "/backtest")]
+    assert post == [{"strategy": "TrendBreakout", "timerange": "20220101-", "enable_protections": False,
+                     "dry_run_wallet": 1000, "timeframe_detail": "15m"}]
+    assert r.json()["warnings"] == ["BTC: nến 15m chỉ có từ 2023-01-01, trước đó khớp lệnh theo nến 4h"]
+
+
+def test_backtest_refuses_when_a_coin_lacks_15m(tmp_path, monkeypatch):
+    calls = []
+    c, _ = _tune_app(tmp_path, monkeypatch, {("GET", "/show_config"): {"timeframe": "4h"}}, calls,
+                     pairs=("BTC/USDT:USDT", "SOL/USDT:USDT"))
+    full = ("2021-01-01", "2026-09-30 20:00")
+    _ranges(monkeypatch, {("BTC/USDT:USDT", "4h"): full, ("SOL/USDT:USDT", "4h"): full, ("BTC/USDT:USDT", "15m"): full})
+    r = c.post("/api/tune/backtest", json={"params": {}, "timerange": "20210101-"}, headers=TS)
+    assert r.status_code == 400 and "Thiếu nến 15m của SOL" in r.json()["detail"]
+    assert not [1 for m, p, _ in calls if m == "POST"]                # không chạy backtest lệch
+
+
+def test_backtest_no_detail_for_15m_strategy(tmp_path, monkeypatch):
+    calls = []
+    c, _ = _tune_app(tmp_path, monkeypatch, {("GET", "/show_config"): {"timeframe": "15m"}}, calls)
+    assert c.post("/api/tune/backtest", json={"params": {}, "timerange": "20210101-"}, headers=TS).status_code == 200
+    assert "timeframe_detail" not in [j for m, p, j in calls if (m, p) == ("POST", "/backtest")][0]
+
+
+def test_backtest_error_shown_not_swallowed(tmp_path, monkeypatch):
+    calls = []
+    c, _ = _tune_app(tmp_path, monkeypatch, {("GET", "/backtest"): {
+        "status": "error", "running": False, "status_msg": "Backtest failed with No data found. Terminating."}}, calls)
+    j = c.get("/api/tune/backtest", headers=TS).json()
+    assert j["status"] == "error" and "No data found" in j["message"] and "LAB không có nến" in j["message"]
+
+
+def test_labdata_command_and_temp_config(tmp_path):
+    import labdata
+
+    bot = json.loads((REPO / "bot" / "deploy" / "config.base.json").read_text())
+    cmd = labdata.build_command(bot, Path("/tmp/x.json"), Path("/freqtrade/user_data/data/binance"))
+    assert cmd[:8] == ["freqtrade", "download-data", "-c", "/tmp/x.json", "--userdir", "/freqtrade/user_data",
+                       "--datadir", "/freqtrade/user_data/data/binance"]
+    assert cmd[cmd.index("-p") + 1:cmd.index("-t")] == bot["exchange"]["pair_whitelist"]
+    assert cmd[cmd.index("-t") + 1:] == ["4h", "15m"] and "--erase" not in cmd
+    tmp = labdata.temp_config(bot)
+    assert "api_server" not in tmp and "api_server" in bot and tmp["exchange"] == bot["exchange"]
+    assert labdata.build_command({**bot, "timeframe": "15m"}, Path("c"), Path("d"))[-2:] == ["-t", "15m"]
+
+
+def test_labdata_updater_runs_and_alerts_after_two_failures(tmp_path):
+    import labdata
+
+    bot = tmp_path / "config.base.json"
+    bot.write_text(json.dumps({"timeframe": "4h", "api_server": {"enabled": True},
+                               "exchange": {"name": "binance", "pair_whitelist": ["BTC/USDT:USDT"]}}))
+    seen, files, sent, results = [], [], [], [(1, "x - freqtrade - ERROR - mạng lỗi"), (0, "ok - ERROR - Pair X not available"),
+                                   (1, ""), (0, "ok")]
+
+    async def fake_exec(cmd, timeout):
+        cfg_file = Path(cmd[cmd.index("-c") + 1])
+        seen.append(json.loads(cfg_file.read_text()))               # config tạm tồn tại lúc chạy
+        files.append(cfg_file)
+        return results.pop(0)
+
+    async def notify(msg):
+        sent.append(msg)
+
+    u = labdata.Updater(bot, tmp_path / "data", notify, exec_=fake_exec)
+    (tmp_path / "data").mkdir()
+    assert asyncio.run(u.once()) is False and sent == [] and u.status()["last_error"].endswith("mạng lỗi")
+    assert asyncio.run(u.once()) is False and len(sent) == 1 and "2 lần" in sent[0]   # dòng ERROR dù mã 0
+    assert asyncio.run(u.once()) is False and len(sent) == 1                          # không báo lặp
+    assert asyncio.run(u.once()) is True and "Hết" in sent[1] and u.status()["last_error"] is None
+    assert "api_server" not in seen[0] and u.last_ok
+    assert not any(f.exists() for f in files)                                       # xoá config tạm
+    assert labdata.Updater(bot, tmp_path / "data").last_ok == u.last_ok             # nhớ qua lần khởi động lại
+
+
+def test_tune_live_reports_last_update(tmp_path, monkeypatch):
+    responses = {("GET", "/show_config"): {"state": "running", "timeframe": "4h", "strategy": "TrendBreakout"},
+                 ("GET", "/status"): [], ("GET", "/profit"): {}, ("GET", "/whitelist"): {"whitelist": []}}
+    c, data = _tune_app(tmp_path, monkeypatch, responses, [])
+    assert c.get("/api/tune/live", headers=TS).json()["data_update"] == {"enabled": False}
+    data.parent.mkdir(parents=True)
+    (data.parent / "hub_download.json").write_text(json.dumps({"last_ok": "2026-10-01T00:00:00+00:00"}))
+    lab = {"api_url": "http://x", "username": "u", "password": "p", "strategy_dir": tmp_path / "user_data" / "strategies_lab"}
+    c = make_app(tmp_path, strategy="TrendBreakout", lab=lab, live={**lab, "strategy_dir": tmp_path / "s"},
+                 bot_config=str(tmp_path / "config.base.json"))
+    u = c.get("/api/tune/live", headers=TS).json()["data_update"]
+    assert u == {"enabled": True, "running": False, "last_ok": "2026-10-01T00:00:00+00:00", "last_error": None}
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
 

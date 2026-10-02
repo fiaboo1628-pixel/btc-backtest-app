@@ -37,6 +37,7 @@ sys.path.insert(0, str(HERE))
 import alerts  # noqa: E402
 import weekly  # noqa: E402
 import candles  # noqa: E402
+import labdata  # noqa: E402
 import live  # noqa: E402
 import push  # noqa: E402
 import tune  # noqa: E402
@@ -56,7 +57,7 @@ def load_cfg(path: Path) -> dict:
     for side in ("lab", "live"):
         if side in cfg and "strategy_dir" in cfg[side]:
             cfg[side]["strategy_dir"] = Path(rel(cfg[side]["strategy_dir"]))
-    for key in ("app_dir", "mode_file"):
+    for key in ("app_dir", "mode_file", "bot_config"):
         if key in cfg:
             cfg[key] = str(rel(cfg[key]))
     if "dir" in cfg.get("data", {}):
@@ -129,7 +130,9 @@ def create_app(cfg: dict) -> FastAPI:
     h = cfg.get("hub", {})
     app_dir = Path(cfg.get("app_dir", HERE.parent.parent)).resolve()
     features = {"data": False, "live": False, "tune": False}
-    store = watchdog = report = None
+    store = watchdog = report = notify = updater = None
+    # config của bot (cặp, khung nến) cho LAB: mặc định cạnh file chế độ (/deploy/.env → /deploy/config.base.json)
+    cfg.setdefault("bot_config", str(Path(cfg.get("mode_file", "/deploy/.env")).parent / "config.base.json"))
     proxies = tailscale_proxies(h)
     if h.get("trust_tailscale", True) and not h.get("allowed_logins"):
         log.warning("allowed_logins trống: mọi tài khoản Tailscale thấy được máy này đều vào được hub")
@@ -141,6 +144,8 @@ def create_app(cfg: dict) -> FastAPI:
             tasks.append(asyncio.create_task(watchdog.run()))
         if report:
             tasks.append(asyncio.create_task(report()))
+        if updater and features["tune"]:
+            tasks.append(asyncio.create_task(updater.run()))
         yield
         for task in tasks:
             task.cancel()
@@ -189,6 +194,7 @@ def create_app(cfg: dict) -> FastAPI:
                 raise RuntimeError("không kênh nào nhận cảnh báo")
 
         has_channel = lambda: bool(tg or pusher.subs)  # noqa: E731
+        notify = send
         app.include_router(live.router(cfg, has_channel))
         features["live"] = True
         watchdog = alerts.Watchdog(tune.FtClient(cfg["live"]), send, has_channel)
@@ -200,8 +206,15 @@ def create_app(cfg: dict) -> FastAPI:
         async def weekly_report():
             return await weekly.build(ft_live, ft_paper)
     if "lab" in cfg and "live" in cfg:
+        if cfg.get("lab_data_update", True):
+            ft_lab = tune.FtClient(cfg["lab"])
+
+            async def lab_busy() -> bool:
+                return bool((await ft_lab.call("GET", "/backtest")).get("running"))
+
+            updater = labdata.Updater(Path(cfg["bot_config"]), tune.lab_datadir(cfg), notify, lab_busy)
         try:
-            app.include_router(tune.router(cfg))
+            app.include_router(tune.router(cfg, updater))
             features["tune"] = True
         except Exception as e:  # noqa: BLE001 — thiếu freqtrade/chiến lược thì hub vẫn chạy phần còn lại
             log.warning("Tắt Chỉnh tham số: %s", e)

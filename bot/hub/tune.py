@@ -19,6 +19,8 @@ import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+DETAIL_TF = "15m"              # nến chi tiết để khớp lệnh trong nến tín hiệu (--timeframe-detail)
+
 # Nhãn tiếng Việt cho từng tham số. Tham số nào không có ở đây vẫn hiện, với tên gốc.
 LABELS: dict[str, tuple[str, str]] = {
     # TrendBreakout
@@ -159,6 +161,43 @@ class FtClient:
         return r.json()
 
 
+def lab_datadir(cfg: dict) -> Path:
+    """datadir mặc định của LAB (freqtrade): user_data/data/binance; nến futures nằm trong thư mục con futures/."""
+    return Path(cfg["lab"]["strategy_dir"]).parent / "data" / "binance"
+
+
+def tf_seconds(tf: str) -> int:
+    return int(tf[:-1]) * {"m": 60, "h": 3600, "d": 86400, "w": 604800}[tf[-1]]
+
+
+def detail_problems(rows: list[dict], tf: str, timerange: str) -> tuple[list[str], list[str]]:
+    """So nến 15m với nến tín hiệu của từng coin (rows từ data_ranges). Trả về (lỗi, cảnh báo).
+    freqtrade KHÔNG báo lỗi khi một coin thiếu nến chi tiết — nó lặng lẽ khớp lệnh theo nến tín hiệu cho coin đó
+    (chỉ báo "No data found" khi thiếu cả) — nên hub tự kiểm tra trước khi chạy."""
+    by = {(r["pair"], r["tf"]): r for r in rows}
+    tr_from, _, tr_to = timerange.partition("-")
+    day = lambda s: f"{s[:4]}-{s[4:6]}-{s[6:8]}" if s else ""  # noqa: E731
+    missing, warns = [], []
+    for pair in dict.fromkeys(r["pair"] for r in rows):
+        coin = pair.split("/")[0]
+        main, det = by.get((pair, tf)), by.get((pair, DETAIL_TF))
+        if not det or not det["from"]:
+            missing.append(coin)
+            continue
+        if not main or not main["from"]:
+            continue                                 # thiếu nến tín hiệu: freqtrade tự báo
+        start = max(main["from"], day(tr_from))
+        end = min(main["to"][:10], day(tr_to) or main["to"][:10])
+        if det["from"] > start:
+            warns.append(f"{coin}: nến {DETAIL_TF} chỉ có từ {det['from']}, trước đó khớp lệnh theo nến {tf}")
+        if det["to"][:10] < end:
+            warns.append(f"{coin}: nến {DETAIL_TF} chỉ tới {det['to'][:10]}, sau đó khớp lệnh theo nến {tf}")
+    errors = [f"Thiếu nến {DETAIL_TF} của {', '.join(missing)}: freqtrade sẽ không báo lỗi mà lặng lẽ khớp lệnh "
+              f"theo nến {tf} cho các coin này, kết quả lệch với các coin khác. Chờ hub tự tải nến "
+              "(mỗi ngày, xem khung \"Bot đang chạy\") rồi chạy lại."] if missing else []
+    return errors, warns
+
+
 def data_ranges(data_dir: Path, pairs: list[str], tfs: list[str]) -> list[dict]:
     """Nến LAB có sẵn cho từng cặp/khung: ngày đầu, ngày cuối (None = chưa có file)."""
     out = []
@@ -174,6 +213,14 @@ def data_ranges(data_dir: Path, pairs: list[str], tfs: list[str]) -> list[dict]:
                     row.update({"from": d.iloc[0].strftime("%Y-%m-%d"), "to": d.iloc[-1].strftime("%Y-%m-%d %H:%M")})
             out.append(row)
     return out
+
+
+def bot_pairs(cfg: dict) -> list[str]:
+    """Cặp của bot (LAB dùng chung config.base.json); không đọc được thì []."""
+    try:
+        return json.loads(Path(cfg["bot_config"]).read_text(encoding="utf-8"))["exchange"]["pair_whitelist"]
+    except (KeyError, OSError, ValueError):
+        return []
 
 
 def summarize(res: dict, strategy: str) -> dict:
@@ -199,6 +246,12 @@ def summarize(res: dict, strategy: str) -> dict:
              "profit_factor": y.get("profit_factor")}
             for y in s.get("periodic_breakdown", {}).get("year", [])
         ],
+        "pairs": [
+            {"pair": p["key"], "trades": p["trades"], "profit_abs": p["profit_total_abs"],
+             "profit_pct": p["profit_total"] * 100, "profit_factor": p.get("profit_factor"),
+             "winrate_pct": p["winrate"] * 100}
+            for p in s.get("results_per_pair", []) if p.get("key") != "TOTAL"
+        ],
         "equity": eq,
         "stake_currency": s.get("stake_currency", "USDT"),
     }
@@ -214,14 +267,15 @@ class BacktestIn(ParamsIn):
     wallet: float = 1000
 
 
-def router(cfg: dict) -> APIRouter:
+def router(cfg: dict, updater=None) -> APIRouter:
+    """updater: labdata.Updater (tự tải nến cho LAB) hoặc None khi tắt."""
     strat = cfg["strategy"]
     lab_dir: Path = cfg["lab"]["strategy_dir"]
     live_dir: Path = cfg["live"]["strategy_dir"]
     schema = load_schema(lab_dir / f"{strat}.py", strat)
     lab, live = FtClient(cfg["lab"]), FtClient(cfg["live"])
     mode_file = Path(cfg.get("mode_file", "/deploy/.env"))
-    data_dir = lab_dir.parent / "data" / "binance" / "futures"      # datadir mặc định của LAB (freqtrade)
+    data_dir = lab_datadir(cfg) / "futures"
     state: dict[str, Any] = {"pending": None, "history": [], "failed": False}
     lock = asyncio.Lock()
     r = APIRouter(prefix="/api/tune")
@@ -239,20 +293,32 @@ def router(cfg: dict) -> APIRouter:
     @r.post("/backtest")
     async def start_backtest(body: BacktestIn):
         grouped = validate(schema, body.params, base=read_params(schema, lab_dir, strat))
+        if updater and updater.running:
+            raise HTTPException(409, "Hub đang tải nến mới cho LAB, chờ xong rồi chạy (thường vài phút).")
         async with lock:
             cur = await lab.call("GET", "/backtest")
             if cur.get("running"):
                 raise HTTPException(409, "Đang có backtest chạy, chờ xong đã.")
+            tf = (await lab.call("GET", "/show_config")).get("timeframe")
+            req = {"strategy": strat, "timerange": body.timerange,
+                   "enable_protections": False, "dry_run_wallet": body.wallet}
+            warns: list[str] = []
+            if tf and tf_seconds(tf) > tf_seconds(DETAIL_TF):  # freqtrade đòi khung chi tiết nhỏ hơn khung chiến lược
+                pairs = bot_pairs(cfg)
+                if pairs:
+                    rows = await asyncio.to_thread(data_ranges, data_dir, pairs, [tf, DETAIL_TF])
+                    errors, warns = detail_problems(rows, tf, body.timerange)
+                    if errors:
+                        raise HTTPException(400, errors[0])
+                req["timeframe_detail"] = DETAIL_TF
             write_params(grouped, lab_dir, strat, backup=False)
             await lab.call("DELETE", "/backtest")        # bỏ kết quả cũ trong bộ nhớ
-            await lab.call("POST", "/backtest", json={
-                "strategy": strat, "timerange": body.timerange,
-                "enable_protections": False, "dry_run_wallet": body.wallet,
-            })
+            await lab.call("POST", "/backtest", json=req)
             flat = {k: v for sp in grouped.values() for k, v in sp.items()}
-            state["pending"] = {"params": flat, "timerange": body.timerange}
+            state["pending"] = {"params": flat, "timerange": body.timerange,
+                                "detail": req.get("timeframe_detail"), "warnings": warns}
             state["failed"] = False
-        return {"ok": True}
+        return {"ok": True, "warnings": warns}
 
     @r.get("/backtest")
     async def poll_backtest():
@@ -269,6 +335,9 @@ def router(cfg: dict) -> APIRouter:
         elif r["status"] == "error" and state["pending"]:
             state["pending"] = None                  # lần chạy hỏng: bỏ, không ghi vào lịch sử
             state["failed"] = True
+        if r["status"] == "error" and "No data found" in (r.get("status_msg") or ""):
+            out["message"] = (f"{r.get('status_msg')} — LAB không có nến cho khoảng thời gian/khung này "
+                              "(xem \"Dữ liệu backtest\" ở khung Bot đang chạy).")
         # lần chạy gần nhất bị lỗi thì không trả kết quả cũ, tránh hiểu nhầm là kết quả mới
         if state["history"] and not state["failed"]:
             out["last"] = state["history"][0]
@@ -314,7 +383,9 @@ def router(cfg: dict) -> APIRouter:
             "timeframe": tf,
             "max_open_trades": conf.get("max_open_trades"),
             "data_dir": "bot/user_data/data/binance/futures",
-            "data": await asyncio.to_thread(data_ranges, data_dir, pairs, [tf, "15m"] if tf != "15m" else [tf]),
+            "data": await asyncio.to_thread(data_ranges, data_dir, pairs,
+                                            [tf, DETAIL_TF] if tf != DETAIL_TF else [tf]),
+            "data_update": updater.status() if updater else {"enabled": False},
             "strategy": conf.get("strategy"),
             "open_trades": len(trades),
             "profit_pct": profit.get("profit_all_percent"),
