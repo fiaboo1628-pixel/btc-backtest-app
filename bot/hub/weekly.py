@@ -86,7 +86,8 @@ async def build(live, paper) -> dict:
         trades[name] = [t for t in got.get("trades", []) if not t.get("is_open")]
         out[name] = stats(trades[name], bal.get("starting_capital") or 0.0)
         out[name]["since"] = prof.get("bot_start_timestamp") or 0   # lần chạy đầu của DB, freqtrade lưu lại
-    lines = [_line(k.capitalize(), v) if "error" not in v else f"{k.capitalize()}: không đọc được ({v['error']})"
+    label = {"demo": "Live", "paper": "Paper"}
+    lines = [_line(label[k], v) if "error" not in v else f"{label[k]}: không đọc được ({v['error']})"
              for k, v in out.items()]
     if "demo" in trades and "paper" in trades:
         d, p = trades["demo"], trades["paper"]

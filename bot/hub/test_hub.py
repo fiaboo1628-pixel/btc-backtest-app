@@ -698,6 +698,6 @@ def test_weekly_report():
     # Demo chạy trước paper: lệnh lúc paper chưa chạy không tính vào phần so
     out = asyncio.run(weekly.build(Fake([tr(0, 10), tr(300, -5)]), Fake([tr(305, -4)], start=200 * 60_000)))
     assert out["match"] == {"demo": 1, "paper": 1, "both": 1}
-    assert "Demo: 2 lệnh" in out["text"] and "PF 2.00" in out["text"]
+    assert "Live: 2 lệnh" in out["text"] and "PF 2.00" in out["text"]
     out = asyncio.run(weekly.build(Fake([]), Down()))
     assert "Paper: không đọc được" in out["text"] and "match" not in out
