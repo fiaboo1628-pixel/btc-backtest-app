@@ -257,6 +257,21 @@ def summarize(res: dict, strategy: str) -> dict:
     }
 
 
+def bt_trades(res: dict, strategy: str) -> list[dict]:
+    """Từng lệnh của lần backtest, mới nhất trước, cùng tên trường với /api/trades của bot (app dùng chung cách vẽ)."""
+    def ms(t: dict, k: str) -> int | None:
+        if t.get(f"{k}_timestamp") is not None:
+            return int(t[f"{k}_timestamp"])
+        d = t.get(f"{k}_date")
+        return int(datetime.fromisoformat(str(d).replace(" ", "T")).timestamp() * 1000) if d else None
+    out = [{"pair": t["pair"], "is_short": bool(t.get("is_short")), "leverage": t.get("leverage"),
+            "open_timestamp": ms(t, "open"), "close_timestamp": ms(t, "close"),
+            "open_rate": t.get("open_rate"), "close_rate": t.get("close_rate"),
+            "profit_abs": t.get("profit_abs"), "profit_ratio": t.get("profit_ratio"), "exit_reason": t.get("exit_reason")}
+           for t in res["strategy"][strategy].get("trades", [])]
+    return sorted(out, key=lambda t: t["close_timestamp"] or 0, reverse=True)
+
+
 # ----------------------------------------------------------------------------- router
 class ParamsIn(BaseModel):
     params: dict[str, Any]
@@ -276,7 +291,7 @@ def router(cfg: dict, updater=None) -> APIRouter:
     lab, live = FtClient(cfg["lab"]), FtClient(cfg["live"])
     mode_file = Path(cfg.get("mode_file", "/deploy/.env"))
     data_dir = lab_datadir(cfg) / "futures"
-    state: dict[str, Any] = {"pending": None, "history": [], "failed": False}
+    state: dict[str, Any] = {"pending": None, "history": [], "failed": False, "trades": None}
     lock = asyncio.Lock()
     r = APIRouter(prefix="/api/tune")
 
@@ -330,6 +345,7 @@ def router(cfg: dict, updater=None) -> APIRouter:
             entry = {**state["pending"], "result": summ,
                      "at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
             state["history"].insert(0, entry)
+            state["trades"] = {"at": entry["at"], "trades": bt_trades(r["backtest_result"], strat)}   # chỉ giữ lần gần nhất
             del state["history"][20:]
             state["pending"] = None
         elif r["status"] == "error" and state["pending"]:
@@ -342,6 +358,11 @@ def router(cfg: dict, updater=None) -> APIRouter:
         if state["history"] and not state["failed"]:
             out["last"] = state["history"][0]
         return out
+
+    @r.get("/trades")
+    async def last_trades():
+        """Danh sách lệnh của lần backtest xong gần nhất (tách khỏi /backtest để lúc chờ không phải tải lại cả nghìn lệnh)."""
+        return state["trades"] or {"at": None, "trades": []}
 
     @r.get("/history")
     async def history():

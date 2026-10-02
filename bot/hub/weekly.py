@@ -15,7 +15,8 @@ log = logging.getLogger("hub.weekly")
 
 # Backtest freqtrade TrendBreakout 5 coin 04/2020 → 09/2026 (1470 lệnh / 78 tháng). PF 1.55 lạc quan (5 coin chọn
 # sau khi đã thấy kết quả) — 10 coin cho 1.33, nên verdict lấy 1.1 làm mốc "đúng kỳ vọng".
-EXPECT = {"per_month": 19, "win_pct": 32, "pf": 1.55}
+# Kỳ vọng theo bộ tham số live (SL 3×ATR, rủi ro 1%): backtest 5 coin vốn 500, 2021-01 → 2026-10, 1276 lệnh / 69 tháng.
+EXPECT = {"per_month": 18, "win_pct": 35, "pf": 1.43, "dd_pct": 24}
 MIN_TRADES = 30          # ít hơn thì PF/tỉ lệ thắng chủ yếu là nhiễu
 MATCH_S = 4 * 3600       # cùng cặp, cùng chiều, giờ vào lệch ≤ 1 nến 4h thì coi là cùng một tín hiệu
 VN = timezone(timedelta(hours=7))

@@ -15,7 +15,7 @@ Nhãn, tiêu đề, nút dùng tiếng Anh ngắn gọn; giải thích, thông b
 |---|---|---|
 | **Overview** | Chế độ (Dry-run / Demo / **LIVE**, màu khác nhau), bot đang chạy hay đã dừng / tự dừng vì sụt vốn / không xử lý nến; vốn, lãi lỗ hôm nay + tổng, sụt vốn so với ngưỡng tự dừng 25%; lệnh đang mở (coin, chiều, lãi lỗ, giá stop, stop có trên sàn không); đường vốn; lãi lỗ theo ngày; cảnh báo trong log bot | `/api/live` (15 s/lần khi app đang hiện) |
 | **Trades** | Mọi lệnh đã đóng, lọc theo coin; số lệnh, thắng, profit factor; so với kỳ vọng nghiên cứu (~19 lệnh/tháng, thắng 32%, PF 1,55) | `/api/trades` |
-| **Backtest** | Chỉnh tham số chiến lược (nhãn ngắn + giải thích tiếng Việt, giới hạn từ chính class chiến lược), chọn khoảng thời gian và vốn thử, chạy backtest **bằng freqtrade ở LAB** (khớp lệnh theo nến 15m), kết quả tóm tắt + theo năm + theo coin + đường vốn, lịch sử các lần thử, **Apply to bot** với hộp xác nhận ghi rõ giá trị cũ → mới và tài khoản nào | `/api/tune/*` |
+| **Backtest** | Chỉnh tham số chiến lược (nhãn ngắn + giải thích tiếng Việt, giới hạn từ chính class chiến lược), chọn khoảng thời gian và vốn thử, chạy backtest **bằng freqtrade ở LAB** (khớp lệnh theo nến 15m), kết quả tóm tắt + theo năm + theo coin + đường vốn + **danh sách từng lệnh** (lọc theo coin), lịch sử các lần thử, **Apply to bot** với hộp xác nhận ghi rõ giá trị cũ → mới và tài khoản nào | `/api/tune/*` |
 | **Data** | Nến LAB có coin nào, khung nào, từ ngày nào tới ngày nào, hub tự cập nhật lúc nào, đang tải không, lỗi gì | `/api/tune/live` |
 | **Alerts** | Kênh đang có (điện thoại, Telegram), sự cố đang báo, cảnh báo gần đây, báo cáo tuần; cuối trang: phiên bản, tải lại app | `/api/alerts`, `/api/weekly` |
 

@@ -4,11 +4,14 @@ import { cls, fmt, isoDay, modeInfo, money, pct, signed, signedPct, dateTime } f
 import { clampParam, diffParams, rangePresets, sameParams, timerange } from "../model.js";
 import { card, confirm, errorBox, esc, loading, note, toast, $, $$ } from "../ui.js";
 import { lineChart } from "../chart.js";
+import { tradeRow } from "./trades.js";
 
 export const title = "Backtest";
 
+const PAGE = 50;                     // số lệnh hiện mỗi lần bấm "More"
 const S = { schema: null, values: {}, bot: null, history: [], lastRun: null, polling: false, running: false, range: "all", wallet: 1000,
-  from: "", to: "", resultMsg: "", resultKind: "err", topMsg: "", botErr: null };
+  from: "", to: "", resultMsg: "", resultKind: "err", topMsg: "", botErr: null,
+  trades: null, tcoin: "all", tshow: PAGE };
 let root = null, ctx = null, pollTimer = null, botTimer = null;
 
 export function mount(el, c) {
@@ -47,7 +50,7 @@ async function init() {
   const r = await ctx.api("/api/tune/backtest").catch(() => null);
   if (r?.running) { S.running = true; poll(); }
   else if (r?.status === "error") { S.resultMsg = r.message || "Backtest lỗi"; S.resultKind = "err"; paintResult(); }
-  else if (r?.last) { S.lastRun = r.last; paintResult(); }
+  else if (r?.last) { S.lastRun = r.last; paintResult(); loadTrades(); }
 }
 
 async function refreshBot() {
@@ -96,6 +99,7 @@ function render() {
         <button class="btn sm" type="button" data-act="live" title="Lấy lại bộ tham số bot đang chạy">Load live</button>
       </div>`)}
     ${card("Result", `<div id="resultMsg"></div><div class="progress hidden" id="prog"><i></i></div><div id="result"><p class="hint">Chưa chạy lần nào trong phiên này. Chỉnh tham số rồi bấm <b>Run backtest</b>.</p></div>`, { wide: true, id: "resultBox" })}
+    ${card("Trades", `<div id="btTrades"><p class="hint">Chạy backtest để xem từng lệnh.</p></div>`, { wide: true, id: "tradesBox" })}
     ${card("Recent runs", `<div id="hist"><p class="hint">Chưa có.</p></div>`, { wide: true, id: "histBox" })}
     <div class="actionbar wide">
       <button class="btn primary" id="btnRun" type="button">Run backtest</button>
@@ -217,6 +221,10 @@ function onClick(e) {
     S.range = r.id; S.from = r.from; S.to = r.to;
     $("#dFrom", root).value = r.from; $("#dTo", root).value = r.to;
     $$("button[data-range]", root).forEach((c) => c.setAttribute("aria-pressed", c.dataset.range === r.id));
+  } else if (b.dataset.tcoin) {
+    S.tcoin = b.dataset.tcoin; S.tshow = PAGE; paintTrades();
+  } else if (b.dataset.act === "more") {
+    S.tshow += PAGE * 4; paintTrades();
   } else if (b.dataset.act === "default") {
     for (const p of S.schema.params) S.values[p.name] = p.default; syncInputs();
   } else if (b.dataset.act === "live") {
@@ -230,7 +238,7 @@ function onClick(e) {
 // ---------------------------------------------------------------- backtest
 async function runBacktest() {
   if (!S.from) { toast("Chọn ngày bắt đầu.", "err"); return; }
-  S.resultMsg = ""; S.running = true; syncInputs(); paintResult();
+  S.resultMsg = ""; S.running = true; syncInputs(); paintResult(); paintTrades();
   try {
     const r = await ctx.api("/api/tune/backtest", { method: "POST", body: { params: S.values, timerange: timerange(S.from, S.to), wallet: S.wallet } });
     if (r.warnings?.length) toast(r.warnings[0], "info", 6000);
@@ -257,12 +265,40 @@ async function poll() {
       }
       S.running = false;
       if (r.status === "error") { S.resultMsg = r.message || "Backtest lỗi"; S.resultKind = "err"; S.lastRun = null; }
-      else { S.resultMsg = ""; if (r.last) { S.lastRun = r.last; S.lastRun.wallet ??= S.wallet; } loadHistory(); }
+      else { S.resultMsg = ""; if (r.last) { S.lastRun = r.last; S.lastRun.wallet ??= S.wallet; } loadHistory(); loadTrades(); }
       break;
     }
   } catch (e) { S.running = false; S.resultMsg = e.message; S.resultKind = "err"; }
   S.polling = false;
   paintResult(); syncInputs();
+}
+
+async function loadTrades() {
+  if (!S.lastRun || S.trades?.at === S.lastRun.at) { paintTrades(); return; }
+  try { S.trades = await ctx.api("/api/tune/trades"); S.tcoin = "all"; S.tshow = PAGE; } catch { S.trades = null; }
+  paintTrades();
+}
+
+/** Lệnh của lần backtest gần nhất: lọc theo coin, hiện dần từng trang (hơn nghìn lệnh vẽ một lần thì chậm trên điện thoại). */
+function paintTrades() {
+  const box = $("#btTrades", root);
+  if (!box) return;
+  const all = S.trades?.trades || [];
+  if (S.running) { box.innerHTML = `<p class="hint">Đang chạy backtest…</p>`; return; }
+  if (!S.trades || S.trades.at !== S.lastRun?.at) { box.innerHTML = `<p class="hint">Chạy backtest để xem từng lệnh.</p>`; return; }
+  if (!all.length) { box.innerHTML = `<p class="hint">Lần chạy này không có lệnh nào.</p>`; return; }
+  const coinOf = (t) => t.pair.split("/")[0];
+  const coins = [...new Set(all.map(coinOf))].sort();
+  const list = S.tcoin === "all" ? all : all.filter((t) => coinOf(t) === S.tcoin);
+  const pnl = list.reduce((a, t) => a + (t.profit_abs || 0), 0);
+  const wins = list.filter((t) => t.profit_abs > 0).length;
+  box.innerHTML = `<div class="chips scroll" role="group" aria-label="Filter by coin">
+      <button class="chip" type="button" data-tcoin="all" aria-pressed="${S.tcoin === "all"}">All · ${all.length}</button>
+      ${coins.map((c) => `<button class="chip" type="button" data-tcoin="${esc(c)}" aria-pressed="${S.tcoin === c}">${esc(c)} · ${all.filter((t) => coinOf(t) === c).length}</button>`).join("")}
+    </div>
+    <p class="hint">${list.length} lệnh · thắng ${list.length ? pct(100 * wins / list.length, 0) : "–"} · lãi/lỗ <span class="${cls(pnl)}">${signed(pnl, 0)}</span> · mới nhất trước</p>
+    <div class="list">${list.slice(0, S.tshow).map(tradeRow).join("")}</div>
+    ${list.length > S.tshow ? `<button class="btn sm" type="button" data-act="more" style="margin-top:8px">More (${list.length - S.tshow})</button>` : ""}`;
 }
 
 async function loadHistory() {
