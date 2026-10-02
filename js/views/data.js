@@ -44,11 +44,9 @@ async function load() {
     ${stale ? note("Đã quá 2 ngày chưa cập nhật được — xem log hub trên máy chủ.", "warn") : ""}`;
 
   const blocks = sum.map((b) => {
-    const roleText = b.role === "signal" ? `nến tín hiệu (${esc(b.tf)})` : `nến ${esc(b.tf)} để khớp lệnh trong nến`;
     const rows = b.coins.map((c) => `<tr><td>${esc(c.coin)}</td><td>${c.from ? esc(isoDay(c.from)) : `<span class="down">missing</span>`}</td><td>${c.to ? esc(isoDay(c.to)) + " " + esc(String(c.to).slice(11)) : "–"}</td></tr>`).join("");
     return card(`Candles ${b.tf}`, `
-      <p>${b.from ? `<span class="num"><b>${esc(isoDay(b.from))}</b> → <b>${esc(isoDay(b.to))}</b></span>` : `<span class="down">Chưa có nến ${esc(b.tf)}.</span>`}
-        <span class="hint">Khoảng mọi coin đều có. Dùng làm ${roleText}.</span></p>
+      <p>${b.from ? `<span class="num"><b>${esc(isoDay(b.from))}</b> → <b>${esc(isoDay(b.to))}</b></span>` : `<span class="down">Chưa có nến ${esc(b.tf)}.</span>`}</p>
       ${b.missing.length ? note(`Thiếu ${b.tf} của ${b.missing.join(", ")}: backtest sẽ từ chối chạy cho tới khi hub tải xong.`, "err") : ""}
       <div class="tablewrap"><table><thead><tr><th>Coin</th><th>From</th><th>To</th></tr></thead><tbody>${rows}</tbody></table></div>`, { hint: b.role === "signal" ? "signal" : "fill" });
   }).join("");
@@ -56,11 +54,10 @@ async function load() {
   root.innerHTML = `<div class="cards">
     ${card("Bot config", `<dl class="info">
       <dt>Pairs</dt><dd>${(s.pairs || []).map((p) => `<span class="coinchip">${esc(p.split("/")[0])}</span>`).join("") || "–"}</dd>
-      <dt>Timeframe</dt><dd>${esc(s.timeframe || "–")} <span class="hint">(tín hiệu) + 15m (khớp lệnh khi backtest)</span></dd>
-      <dt>Source</dt><dd>Binance Futures <span class="hint">· freqtrade download-data trên máy chủ</span></dd>
+      <dt>Timeframe</dt><dd>${esc(s.timeframe || "–")}</dd>
+      <dt>Source</dt><dd>Binance Futures</dd>
       <dt>Path</dt><dd><code>${esc(s.data_dir || "")}</code></dd></dl>`, { wide: true })}
     ${card("Update", upd, { wide: true })}
     ${blocks || card("", `<p class="hint">Chưa có thông tin nến.</p>`)}
-    ${card("", `<p class="hint">Backtest ở màn <a href="#backtest">Backtest</a> chỉ chạy trong khoảng mọi coin đều có nến. Lịch sử dài hơn: chạy <code>freqtrade download-data</code> với <code>--timerange</code> xa hơn trên máy chủ (hub chỉ tải tiếp từ nến cuối).</p>`, { wide: true })}
   </div>`;
 }
