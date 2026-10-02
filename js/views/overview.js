@@ -94,7 +94,7 @@ function paint(store) {
         halt.halted ? "Đã quá ngưỡng: bot không vào lệnh mới. Lệnh đang mở vẫn được quản lý bình thường." :
         `Còn cách ngưỡng ${pct(Math.max(0, halt.threshold_pct - halt.max_dd_pct), 1)}. Tính trên lãi/lỗ đã chốt, như luật của bot.`}</p>`)}
 
-    ${card("Lệnh đang mở", openTrades(live, cur), { wide: true, hint: `tối đa ${live.open.length} / 5` })}
+    ${card("Lệnh đang mở", openTrades(live, cur), { wide: true, hint: `${live.open.length} lệnh` })}
 
     ${card("Đường vốn", eq ? lineChart(eq, { label: "Đường vốn", fmtY: (v) => money(v, cur, 0), fmtX: (v) => isoDay(new Date(v).toISOString()) }) + `<p class="hint">Vốn sau mỗi lệnh đóng, ${live.equity.length} lệnh.</p>`
       : `<p class="hint">Cần ít nhất 2 lệnh đã đóng mới vẽ được đường vốn.</p>`)}

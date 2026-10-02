@@ -69,7 +69,7 @@ function paramHtml(p) {
   return `<div class="param" data-name="${esc(p.name)}"><div class="row"><label for="${id}">${esc(p.label)}</label>
       <input type="number" id="${id}" data-param="${esc(p.name)}" min="${p.min}" max="${p.max}" step="${st}" inputmode="decimal"></div>
     <div class="help">${esc(p.help)}</div>
-    <input type="range" data-range="${esc(p.name)}" min="${p.min}" max="${p.max}" step="${st}" aria-label="${esc(p.label)} (thanh trượt)">
+    <input type="range" data-slider="${esc(p.name)}" min="${p.min}" max="${p.max}" step="${st}" aria-label="${esc(p.label)} (thanh trượt)">
     <div class="meta"><span>${p.min}</span><span>mặc định ${p.type === "bool" ? "" : p.default}</span><span>${p.max}</span></div></div>`;
 }
 
@@ -201,12 +201,12 @@ const paramOf = (name) => S.schema.params.find((p) => p.name === name);
 
 function onInput(e) {
   const t = e.target;
-  if (t.dataset.range) { const p = paramOf(t.dataset.range); S.values[p.name] = clampParam(p, t.value); const n = $(`input[type=number][data-param="${p.name}"]`, root); if (n) n.value = S.values[p.name]; syncInputs(); }
+  if (t.dataset.slider) { const p = paramOf(t.dataset.slider); S.values[p.name] = clampParam(p, t.value); const n = $(`input[type=number][data-param="${p.name}"]`, root); if (n) n.value = S.values[p.name]; syncInputs(); }
 }
 function onChange(e) {
   const t = e.target;
   if (t.dataset.param) { const p = paramOf(t.dataset.param); setVal(p, p.type === "bool" ? t.checked : t.value); }
-  if (t.id === "dFrom" || t.id === "dTo") { S[t.id === "dFrom" ? "from" : "to"] = t.value; S.range = ""; $$("[data-range]", root).forEach((c) => c.tagName === "BUTTON" && c.setAttribute("aria-pressed", "false")); }
+  if (t.id === "dFrom" || t.id === "dTo") { S[t.id === "dFrom" ? "from" : "to"] = t.value; S.range = ""; $$("button[data-range]", root).forEach((c) => c.setAttribute("aria-pressed", "false")); }
   if (t.id === "wallet") { S.wallet = Math.max(10, Number(t.value) || 1000); t.value = S.wallet; }
 }
 function onClick(e) {
