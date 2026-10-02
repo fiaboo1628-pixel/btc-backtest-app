@@ -211,6 +211,7 @@ tfoot td { font-weight: 600; }
 .srow .lbl { min-width: 0; }
 .srow .lbl b { display: block; font-size: 14.5px; font-weight: 600; }
 .srow .lbl small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 1px; overflow-wrap: anywhere; }
+.srow .lbl small code { white-space: nowrap; }
 .srow .ctl { display: flex; align-items: center; gap: 4px; justify-self: end; }
 .srow .ctl .st { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
 .srow .ctl .st.on { color: var(--up); } .srow .ctl .st.bad { color: var(--down); } .srow .ctl .st.warn { color: var(--warn); }
