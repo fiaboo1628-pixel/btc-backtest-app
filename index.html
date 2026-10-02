@@ -1,279 +1,53 @@
 <!doctype html>
-<html lang="en">
+<html lang="vi">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0f1115">
+<meta name="theme-color" id="themeColor" content="#0b0d12">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Backtest BTC</title>
+<meta name="apple-mobile-web-app-title" content="Bot">
+<title>Bot giao dịch</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="css/app.css">
-<script type="importmap">
-{
-  "imports": {
-    "@vercel/analytics": "./node_modules/@vercel/analytics/dist/index.mjs",
-    "@vercel/speed-insights": "./node_modules/@vercel/speed-insights/dist/index.mjs"
-  }
-}
-</script>
 </head>
 <body>
+<a class="skip" href="#view">Bỏ qua điều hướng</a>
 <header class="appbar">
   <div class="wrap">
-    <div class="brand">
-      <span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 17l5-6 4 4 7-9"/></svg></span>
-      <h1>Backtest <small id="dsLabel">No data</small></h1>
-    </div>
+    <h1 id="pageTitle">Tổng quan</h1>
+    <span class="pill" id="modePill" hidden></span>
   </div>
+  <div id="netBanner" class="banner" role="status" aria-live="polite" hidden></div>
 </header>
 
-<main class="wrap">
-  <div id="toast" role="status" aria-live="polite"></div>
+<main class="wrap" id="view" tabindex="-1" aria-live="polite"></main>
 
-  <!-- ============================== DATA -->
-  <section class="tab" id="tab-data">
-    <div class="card">
-      <h2>1 · Get price data</h2>
-      <p class="hint">Free Binance history, saved on this phone. Download once, later tap <b>Update</b> to add new candles.</p>
-      <div class="grid2">
-        <label>Market
-          <select id="dlMarket">
-            <option value="futures">Futures</option>
-            <option value="spot">Spot</option>
-          </select>
-        </label>
-        <label>Coin <input id="dlSymbol" value="BTCUSDT" autocapitalize="characters" spellcheck="false"></label>
-        <label>Candle size
-          <select id="dlTf">
-            <option value="1m">1m · best</option>
-            <option value="5m" selected>5m · good</option>
-            <option value="15m">15m · rough</option>
-            <option value="1h">1h · rough</option>
-          </select>
-        </label>
-        <label>Start date <input type="date" id="dlFrom" value="2021-01-01"></label>
-      </div>
-      <p class="hint" id="tfHelp"></p>
-      <p class="hint" id="dlHint"></p>
-      <p class="hint up" id="hubHint" hidden></p>
-      <div class="progress hidden" id="dlProg"><i></i></div>
-      <p class="hint" id="dlStatus"></p>
-      <div class="row">
-        <button class="btn primary grow" id="btnDownload" type="button">Download</button>
-        <button class="btn" id="btnCancel" type="button" hidden>Stop</button>
-      </div>
-      <details class="more">
-        <summary>Problems downloading? · Import CSV</summary>
-        <div class="row">
-          <button class="btn sm" id="btnTest" type="button">Check Binance connection</button>
-        </div>
-        <label>Proxy URL <input id="apiBase" placeholder="only if Binance is blocked" spellcheck="false"></label>
-        <p class="hint">CSV columns: time, open, high, low, close, volume.</p>
-        <div class="grid3">
-          <label>Market
-            <select id="csvMarket"><option value="futures">Futures</option><option value="spot">Spot</option></select>
-          </label>
-          <label>Coin <input id="csvSymbol" value="BTCUSDT"></label>
-          <label>Candle
-            <select id="csvTf"><option>1m</option><option selected>5m</option><option>15m</option><option>1h</option></select>
-          </label>
-        </div>
-        <label class="btn sm file">Choose CSV file<input type="file" id="csvFile" accept=".csv,text/csv,text/plain"></label>
-      </details>
-    </div>
-
-    <div class="card">
-      <h2>2 · Your data <span class="hint" id="storageInfo"></span></h2>
-      <p class="hint">Backtests run on the one marked <b>In use</b>. Tap another to switch.</p>
-      <div id="dsList" class="list"></div>
-    </div>
-  </section>
-
-  <!-- ============================== STRATEGY -->
-  <section class="tab" id="tab-strategy" hidden>
-    <div class="card">
-      <div class="grid2">
-        <label>Name <input id="stName"></label>
-        <label>Load <select id="stPick"></select></label>
-      </div>
-      <div class="row">
-        <label class="inline">TF <select id="stTf"></select></label>
-        <div class="seg">
-          <button id="btnSave" type="button">Save</button>
-          <button id="btnExport" type="button">Export</button>
-          <label class="file">Import<input type="file" id="importJson" accept=".json,application/json"></label>
-          <button id="btnDelete" type="button" class="danger">Delete</button>
-        </div>
-      </div>
-      <p class="hint warn" id="tfNote"></p>
-    </div>
-
-    <div class="card side-long">
-      <h2><span class="up">Long</span> <span class="tag">AND</span></h2>
-      <div id="condLong" class="conds"></div>
-      <button class="btn sm ghost" data-add="long" type="button">+ Add</button>
-    </div>
-    <div class="card side-short">
-      <h2><span class="down">Short</span> <span class="tag">AND</span></h2>
-      <div id="condShort" class="conds"></div>
-      <button class="btn sm ghost" data-add="short" type="button">+ Add</button>
-    </div>
-
-    <div class="card">
-      <h2>Exit &amp; risk</h2>
-      <div class="grid2" id="exitFields"></div>
-    </div>
-
-    <div class="card" id="botCard" hidden>
-      <h2>Bot</h2>
-      <p class="hint" id="botHint">Send these thresholds to the running bot. Only the numbers change — the bot's logic stays the same; the strategy has to follow the bot's template. An open trade keeps its initial stop (1R); exits switch to the new values right away.</p>
-      <p class="hint warn" id="botFit"></p>
-      <div class="row">
-        <button class="btn primary grow" id="btnSendBot" type="button">Send to bot</button>
-        <button class="btn" id="btnFromBot" type="button">Use bot's values</button>
-        <a class="btn" href="/tune/" id="lnkTune">Tune in freqtrade</a>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============================== RESULTS -->
-  <section class="tab" id="tab-result" hidden>
-    <div class="card range">
-      <div class="grid2">
-        <label>From <input type="date" id="rFrom"></label>
-        <label>To <input type="date" id="rTo"></label>
-        <label>Split <input type="date" id="rSplit" value="2025-01-01"></label>
-      </div>
-      <div id="attemptWarn"></div>
-      <details class="more" id="portBox">
-        <summary>Portfolio · several coins, one account</summary>
-        <p class="hint">Runs the strategy on every ticked coin with shared capital, like the bot (BTC ETH SOL XRP DOGE, up to 5 open trades, one per coin). Each coin needs data with the same market and candle size as the data <b>In use</b>.</p>
-        <div class="chips" id="portCoins"></div>
-        <div class="grid2">
-          <label>Max open trades <input type="number" id="portMax" min="1" max="20" step="1" value="5" inputmode="numeric"></label>
-          <label class="check"><input type="checkbox" id="portHalt"> Stop new trades after a 15% drawdown (like the bot)</label>
-        </div>
-        <div class="row">
-          <button class="btn primary grow" id="btnRunPort" type="button">Run portfolio</button>
-          <button class="btn" id="btnDlCoins" type="button" title="Download the bot's coins that are missing, same market and candle size as the data in use">Download bot coins</button>
-        </div>
-      </details>
-    </div>
-    <div id="resBox" hidden>
-      <div class="card hero">
-        <div class="hero-top">
-          <div>
-            <div class="eyebrow">Total return</div>
-            <div class="big" id="resReturn">–</div>
-            <div class="sub" id="resSub"></div>
-          </div>
-          <div class="pillbox" id="resBadges"></div>
-        </div>
-        <svg id="eqChart" class="eq" viewBox="0 0 600 180" preserveAspectRatio="none" role="img" aria-label="Equity curve"></svg>
-        <div class="axis" id="eqAxis"></div>
-        <div class="kpis" id="resKpis"></div>
-        <button class="btn primary wide" id="btnReplay" type="button">&#9654;&nbsp; Replay trades</button>
-        <p class="hint" id="resMeta"></p>
-        <p class="hint warn" id="resWarn"></p>
-      </div>
-      <div class="card">
-        <h2>By year</h2>
-        <div class="years" id="resYears"></div>
-      </div>
-      <div class="card" id="resCoinsCard" hidden>
-        <h2>By coin</h2>
-        <div class="tablewrap"><table id="resCoins"></table></div>
-      </div>
-      <div class="card">
-        <h2>Exits</h2>
-        <div class="exitbar" id="resExitBar"></div>
-        <p class="chips" id="resExits"></p>
-      </div>
-      <div class="card">
-        <h2>Periods</h2>
-        <div class="tablewrap"><table id="resPeriods"></table></div>
-      </div>
-      <div class="card">
-        <details class="more"><summary>Last trades</summary><div class="trades" id="resTrades"></div></details>
-      </div>
-    </div>
-  </section>
-  <!-- ============================== LIVE (chỉ khi chạy trên hub) -->
-  <section class="tab" id="tab-live" hidden>
-    <div id="liveBox"></div>
-  </section>
-</main>
-
-<!-- ============================== REPLAY (như Visual mode của MT5) -->
-<section class="replay" id="replay" hidden aria-label="Replay">
-  <header class="rp-top">
-    <button class="icon" id="rpClose" type="button" aria-label="Close">&#10005;</button>
-    <div class="rp-hud">
-      <div><span>Balance</span><b id="rpBal">–</b></div>
-      <div><span>Position</span><b id="rpPos">–</b></div>
-      <div><span>Trade</span><b id="rpNo">–</b></div>
-    </div>
-  </header>
-  <div class="rp-chart" id="rpChart"></div>
-  <div class="rp-bottom">
-    <div class="rp-row"><span class="rp-time" id="rpTime"></span>
-      <div class="seg rp-speed" id="rpSpeed"><button type="button">1×</button><button type="button">5×</button><button type="button">20×</button><button type="button">100×</button></div>
-    </div>
-    <input type="range" id="rpScrub" aria-label="Timeline">
-    <div class="rp-ctrl">
-      <button type="button" id="rpPrevTrade" aria-label="Previous trade">&#9198;</button>
-      <button type="button" id="rpPrev" aria-label="Back one bar">&#9664;</button>
-      <button type="button" id="rpPlay" class="rp-play" aria-label="Play">&#9654;</button>
-      <button type="button" id="rpNext" aria-label="Forward one bar">&#9654;&#65038;</button>
-      <button type="button" id="rpNextTrade" aria-label="Next trade">&#9197;</button>
-    </div>
-  </div>
-</section>
-
-<nav class="tabbar" aria-label="Tabs">
+<nav id="tabbar" class="tabbar" aria-label="Màn hình">
   <div class="wrap">
-    <button type="button" data-tab="data" aria-pressed="true">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></svg>
-      <span>Data</span>
-    </button>
-    <button type="button" data-tab="strategy">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
-      <span>Strategy</span>
-    </button>
-    <button type="button" data-tab="result">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16M6 16l4-5 3 3 5-7"/></svg>
-      <span>Results</span>
-    </button>
-    <button type="button" data-tab="live" hidden>
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-5 4 10 2-5h6"/></svg>
-      <span>Live</span>
-    </button>
-    <button type="button" class="run" id="btnRun">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10-6.5z"/></svg>
-      <span>Run</span>
-    </button>
+    <a href="#overview" data-view="overview"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg><span>Tổng quan</span></a>
+    <a href="#trades" data-view="trades"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Lệnh</span></a>
+    <a href="#backtest" data-view="backtest"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17l5-6 4 4 7-9"/><path d="M4 21h16"/></svg><span>Backtest</span></a>
+    <a href="#data" data-view="data"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg><span>Dữ liệu</span></a>
+    <a href="#alerts" data-view="alerts"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0"/></svg><span>Cảnh báo</span></a>
   </div>
 </nav>
 
-<template id="condTpl">
-  <div class="cond">
-    <div class="condhead">
-      <select class="c-ind" aria-label="Indicator"></select>
-      <button class="icon c-del" type="button" aria-label="Remove">✕</button>
-    </div>
-    <div class="cgrid">
-      <span class="c-params"></span>
-      <label>TF <select class="c-tf"></select></label>
-      <label>Op <select class="c-op"></select></label>
-      <label>Value <input type="number" class="c-val" step="any" inputmode="decimal"></label>
-    </div>
-    <input type="range" class="c-range" aria-label="Value">
-  </div>
-</template>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+<dialog id="confirm" aria-labelledby="confirmTitle">
+  <h3 id="confirmTitle"></h3>
+  <div id="confirmBody" class="dialog-body"></div>
+  <div class="dialog-actions">
+    <button class="btn" id="confirmNo" type="button">Huỷ</button>
+    <button class="btn primary" id="confirmYes" type="button">Đồng ý</button>
+  </div>
+</dialog>
+
+<footer class="wrap foot"><span id="user"></span> <span>Phiên bản <span id="version"></span></span></footer>
 <script type="module" src="js/app.js"></script>
 </body>
 </html>

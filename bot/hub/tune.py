@@ -315,7 +315,7 @@ def router(cfg: dict, updater=None) -> APIRouter:
             await lab.call("DELETE", "/backtest")        # bỏ kết quả cũ trong bộ nhớ
             await lab.call("POST", "/backtest", json=req)
             flat = {k: v for sp in grouped.values() for k, v in sp.items()}
-            state["pending"] = {"params": flat, "timerange": body.timerange,
+            state["pending"] = {"params": flat, "timerange": body.timerange, "wallet": body.wallet,
                                 "detail": req.get("timeframe_detail"), "warnings": warns}
             state["failed"] = False
         return {"ok": True, "warnings": warns}
