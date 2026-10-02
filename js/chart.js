@@ -63,3 +63,41 @@ export function drawdownBar({ current_dd_pct = 0, max_dd_pct = 0, threshold_pct 
     <div class="dd-th" style="left:${p(threshold_pct)}"><span>${threshold_pct}%</span></div>
   </div>`;
 }
+
+/**
+ * Nến quanh một lệnh backtest. rows [ms, o, h, l, c, ema, atr]; lv từ model.tradeLevels; w = bề rộng thật (px) để chữ không méo.
+ * Vẽ: vùng giữ lệnh, nến, EMA200, kênh thoát, giá vào/ra/SL, mũi tên vào/ra.
+ */
+export function candleChart(rows, t, lv, { w = 600, h = 280, fmtY = (v) => v, fmtX = (v) => v } = {}) {
+  if (!rows?.length) return `<div class="chart-empty">Không có nến.</div>`;
+  const lvls = [lv.stop, t.open_rate, t.close_rate].filter((v) => v != null);
+  const padL = 4, padT = 10, padB = 18, padR = 10 + 6.5 * Math.max(...lvls.map((v) => `Out ${fmtY(v)}`.length));   // chỗ cho nhãn giá
+  const lo = Math.min(...rows.map((r) => r[3]), ...lvls), hi = Math.max(...rows.map((r) => r[2]), ...lvls);
+  const span = hi - lo || 1, step = (w - padL - padR) / rows.length, bw = Math.max(1, step * 0.7);
+  const X = (i) => padL + (i + 0.5) * step;
+  const Y = (v) => padT + ((hi - v) * (h - padT - padB)) / span;
+  const path = (vals) => vals.map((v, i) => (v == null ? "" : `${vals[i - 1] == null ? "M" : "L"}${X(i).toFixed(1)},${Y(v).toFixed(1)}`)).join("");
+  const iOut = lv.iOut < 0 ? rows.length - 1 : lv.iOut;
+  const used = [];
+  const labelY = (y) => { while (used.some((u) => Math.abs(u - y) < 12)) y += y > h / 2 ? -12 : 12; used.push(y); return y; };
+  const hline = (v, c, text) => `<line x1="${X(lv.iIn).toFixed(1)}" x2="${w - padR}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" class="${c}"/>
+    <text x="${w - padR + 3}" y="${(labelY(Y(v)) + 4).toFixed(1)}" class="lbl ${c}">${esc(text)} ${esc(fmtY(v))}</text>`;
+  const arrow = (i, v, up, c) => { const x = X(i), y = Y(v), d = up ? 1 : -1;
+    return `<path d="M${x.toFixed(1)},${y.toFixed(1)} l-5,${9 * d} h10 z" class="${c}"/>`; };
+  const candles = rows.map((r, i) => { const x = X(i), c = r[4] >= r[1] ? "cup" : "cdown";
+    return `<line x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${Y(r[2]).toFixed(1)}" y2="${Y(r[3]).toFixed(1)}" class="${c}"/><rect x="${(x - bw / 2).toFixed(1)}" y="${Y(Math.max(r[1], r[4])).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1, Math.abs(Y(r[1]) - Y(r[4]))).toFixed(1)}" class="${c}"/>`; }).join("");
+  const win = (t.profit_abs ?? 0) > 0;
+  return `<svg class="chart candles" viewBox="0 0 ${w} ${h}" style="height:${h}px" role="img" aria-label="${esc(t.pair)}: vào ${esc(fmtY(t.open_rate))}, ra ${esc(fmtY(t.close_rate))}">
+    <rect x="${(X(lv.iIn) - step / 2).toFixed(1)}" y="${padT}" width="${((iOut - lv.iIn + 1) * step).toFixed(1)}" height="${h - padT - padB}" class="hold ${win ? "win" : "loss"}"/>
+    <path d="${path(rows.map((r) => r[5]))}" class="ema"/>
+    <path d="${path(lv.exit)}" class="xch"/>
+    ${candles}
+    ${lv.stop != null ? hline(lv.stop, "stop", "SL") : ""}
+    ${hline(t.open_rate, "entry", "In")}
+    ${t.close_rate != null ? hline(t.close_rate, win ? "exit up" : "exit down", "Out") : ""}
+    ${lv.iIn >= 0 ? arrow(lv.iIn, t.is_short ? rows[lv.iIn][2] : rows[lv.iIn][3], !t.is_short, "mk-in") : ""}
+    ${lv.iOut >= 0 ? arrow(lv.iOut, t.is_short ? rows[lv.iOut][3] : rows[lv.iOut][2], t.is_short, "mk-out") : ""}
+    <text x="${padL}" y="${h - 4}" class="lbl muted">${esc(fmtX(rows[0][0]))}</text>
+    <text x="${w - padR}" y="${h - 4}" class="lbl muted" text-anchor="end">${esc(fmtX(rows.at(-1)[0]))}</text>
+  </svg>`;
+}

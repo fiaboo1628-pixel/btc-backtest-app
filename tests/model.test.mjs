@@ -78,3 +78,14 @@ test("khoảng thời gian backtest", () => {
   assert.equal(m.timerange("2021-01-01", "2025-01-01"), "20210101-20250101");
   assert.equal(m.pfVerdict(1.6), "tốt"); assert.equal(m.pfVerdict(0.9), "lỗ"); assert.equal(m.pfVerdict(null), "");
 });
+
+test("nến của lệnh backtest: vị trí vào/ra, kênh thoát, SL ban đầu", () => {
+  const H = 4 * 3600_000;
+  const rows = [10, 12, 11, 14, 13, 9].map((c, i) => [i * H, c, c + 1, c - 1, c, c, 2]);
+  const long = m.tradeLevels(rows, { open_timestamp: 2 * H + 60_000, close_timestamp: 5 * H, open_rate: 11, is_short: false }, 2, 3);
+  assert.equal(long.iIn, 2); assert.equal(long.iOut, 5);
+  assert.deepEqual(long.exit, [null, null, 9, 10, 10, 12]);   // đáy (low) 2 nến trước
+  assert.equal(long.stop, 11 - 3 * 2);
+  const short = m.tradeLevels(rows, { open_timestamp: 0, close_timestamp: H, open_rate: 10, is_short: true }, 2, 3);
+  assert.equal(short.exit[2], 13); assert.equal(short.stop, null);   // nến đầu: chưa có nến tín hiệu
+});

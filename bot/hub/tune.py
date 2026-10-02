@@ -215,6 +215,26 @@ def data_ranges(data_dir: Path, pairs: list[str], tfs: list[str]) -> list[dict]:
     return out
 
 
+def candle_window(data_dir: Path, pair: str, tf: str, start_ms: int, end_ms: int,
+                  before: int = 80, after: int = 20, cap: int = 600) -> list[list]:
+    """Nến LAB quanh một lệnh backtest: [[ms, open, high, low, close, ema200, atr20], ...]; EMA/ATR tính trên cả file (đủ nến khởi động)."""
+    f = data_dir / f"{pair.replace('/', '_').replace(':', '_')}-{tf}-futures.feather"
+    if not f.is_file():
+        return []
+    import pandas as pd
+
+    df = pd.read_feather(f, columns=["date", "open", "high", "low", "close"])
+    df["ema"] = df["close"].ewm(span=200, adjust=False).mean()
+    tr = pd.concat([df["high"] - df["low"], (df["high"] - df["close"].shift()).abs(), (df["low"] - df["close"].shift()).abs()], axis=1).max(axis=1)
+    df["atr"] = tr.ewm(alpha=1 / 20, adjust=False).mean()            # Wilder, như ta.ATR(20) của chiến lược
+    ms = (pd.to_datetime(df["date"], utc=True) - pd.Timestamp(0, tz="UTC")) // pd.Timedelta("1ms")
+    i0 = max(0, int(ms.searchsorted(start_ms, "right")) - 1 - before)
+    i1 = min(len(df), int(ms.searchsorted(end_ms, "right")) + after, i0 + cap)
+    w = df.iloc[i0:i1]
+    return [[int(t), *(round(float(x), 8) for x in row)] for t, row in
+            zip(ms.iloc[i0:i1], w[["open", "high", "low", "close", "ema", "atr"]].itertuples(index=False))]
+
+
 def bot_pairs(cfg: dict) -> list[str]:
     """Cặp của bot (LAB dùng chung config.base.json); không đọc được thì []."""
     try:
@@ -363,6 +383,17 @@ def router(cfg: dict, updater=None) -> APIRouter:
     async def last_trades():
         """Danh sách lệnh của lần backtest xong gần nhất (tách khỏi /backtest để lúc chờ không phải tải lại cả nghìn lệnh)."""
         return state["trades"] or {"at": None, "trades": []}
+
+    @r.get("/candles")
+    async def trade_candles(pair: str, start: int, end: int):
+        """Nến khung của bot quanh một lệnh backtest (màn Backtest bấm vào lệnh để xem)."""
+        if pair not in bot_pairs(cfg):
+            raise HTTPException(400, "Coin không thuộc bot")
+        tf = json.loads(Path(cfg["bot_config"]).read_text(encoding="utf-8"))["timeframe"]
+        rows = await asyncio.to_thread(candle_window, data_dir, pair, tf, start, end)
+        if not rows:
+            raise HTTPException(404, f"LAB không có nến {tf} của {pair}")
+        return {"tf": tf, "candles": rows}
 
     @r.get("/history")
     async def history():

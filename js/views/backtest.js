@@ -1,9 +1,9 @@
 // Màn Backtest / Parameters: thay trang /tune/ cũ. Chỉnh tham số theo schema của hub, chạy backtest freqtrade ở LAB
 // (/api/tune/backtest), xem kết quả theo năm / theo coin, lịch sử các lần thử, áp dụng cho bot sau khi xác nhận.
-import { cls, fmt, isoDay, modeInfo, money, pct, signed, signedPct, dateTime } from "../format.js";
-import { clampParam, diffParams, rangePresets, sameParams, timerange } from "../model.js";
+import { cls, fmt, isoDay, modeInfo, money, pct, price, signed, signedPct, dateTime } from "../format.js";
+import { clampParam, diffParams, rangePresets, sameParams, timerange, tradeLevels } from "../model.js";
 import { card, confirm, errorBox, esc, loading, note, toast, $, $$ } from "../ui.js";
-import { lineChart } from "../chart.js";
+import { candleChart, lineChart } from "../chart.js";
 import { tradeRow } from "./trades.js";
 
 export const title = "Backtest";
@@ -24,11 +24,12 @@ export function mount(el, c) {
   root.addEventListener("click", onClick);
   root.addEventListener("input", onInput);
   root.addEventListener("change", onChange);
+  root.addEventListener("keydown", onKey);
   init();
 }
 export function unmount() {
   clearTimeout(pollTimer); clearInterval(botTimer); pollTimer = botTimer = null; S.polling = false;
-  root?.removeEventListener("click", onClick); root?.removeEventListener("input", onInput); root?.removeEventListener("change", onChange);
+  root?.removeEventListener("click", onClick); root?.removeEventListener("input", onInput); root?.removeEventListener("change", onChange); root?.removeEventListener("keydown", onKey);
   root = null;
 }
 export function refresh(what) { if (what === "visible") { refreshBot(); if (S.running) poll(); } else init(); }
@@ -209,7 +210,13 @@ function onChange(e) {
   if (t.id === "dFrom" || t.id === "dTo") { S[t.id === "dFrom" ? "from" : "to"] = t.value; S.range = ""; $$("button[data-range]", root).forEach((c) => c.setAttribute("aria-pressed", "false")); }
   if (t.id === "wallet") { S.wallet = Math.max(10, Number(t.value) || 1000); t.value = S.wallet; }
 }
+function onKey(e) {
+  const row = e.key === "Enter" && e.target.closest(".tr[data-ti]");
+  if (row) toggleChart(row);
+}
 function onClick(e) {
+  const row = e.target.closest(".tr[data-ti]");
+  if (row) { toggleChart(row); return; }
   const b = e.target.closest("button");
   if (!b) return;
   if (b.dataset.range) {
@@ -285,7 +292,7 @@ function paintTrades() {
   if (!all.length) { box.innerHTML = `<p class="hint">Lần chạy này không có lệnh nào.</p>`; return; }
   const coinOf = (t) => t.pair.split("/")[0];
   const coins = [...new Set(all.map(coinOf))].sort();
-  const list = S.tcoin === "all" ? all : all.filter((t) => coinOf(t) === S.tcoin);
+  const list = S.tlist = S.tcoin === "all" ? all : all.filter((t) => coinOf(t) === S.tcoin);
   const pnl = list.reduce((a, t) => a + (t.profit_abs || 0), 0);
   const wins = list.filter((t) => t.profit_abs > 0).length;
   box.innerHTML = `<div class="chips scroll" role="group" aria-label="Filter by coin">
@@ -293,8 +300,24 @@ function paintTrades() {
       ${coins.map((c) => `<button class="chip" type="button" data-tcoin="${esc(c)}" aria-pressed="${S.tcoin === c}">${esc(c)} · ${all.filter((t) => coinOf(t) === c).length}</button>`).join("")}
     </div>
     <p class="hint">${list.length} lệnh · thắng ${list.length ? pct(100 * wins / list.length, 0) : "–"} · lãi/lỗ <span class="${cls(pnl)}">${signed(pnl, 0)}</span> · mới nhất trước</p>
-    <div class="list">${list.slice(0, S.tshow).map(tradeRow).join("")}</div>
+    <div class="list">${list.slice(0, S.tshow).map((t, i) => tradeRow(t).replace('<div class="tr"', `<div class="tr" data-ti="${i}" role="button" tabindex="0"`)).join("")}</div>
     ${list.length > S.tshow ? `<button class="btn sm" type="button" data-act="more" style="margin-top:8px">More (${list.length - S.tshow})</button>` : ""}`;
+}
+
+/** Bấm một lệnh: hiện/ẩn biểu đồ nến quanh lệnh đó ngay bên dưới. */
+async function toggleChart(row) {
+  if (row.nextElementSibling?.classList.contains("tchart")) { row.nextElementSibling.remove(); return; }
+  const t = S.tlist[Number(row.dataset.ti)], box = document.createElement("div");
+  box.className = "tchart"; box.innerHTML = loading("Đang tải nến…");
+  row.after(box);
+  try {
+    const q = new URLSearchParams({ pair: t.pair, start: t.open_timestamp, end: t.close_timestamp ?? t.open_timestamp });
+    const d = await ctx.api(`/api/tune/candles?${q}`);
+    const p = S.lastRun?.params || {};
+    const lv = tradeLevels(d.candles, t, p.exit_period, p.r_atr);
+    box.innerHTML = candleChart(d.candles, t, lv, { w: Math.max(280, box.clientWidth), fmtY: price, fmtX: dateTime })
+      + `<p class="hint">${esc(d.tf)} · ${lv.iOut - lv.iIn} nến · <span style="color:#2f81f7">▲</span> vào <span style="color:#e0a000">▼</span> ra · vàng = kênh thoát ${esc(p.exit_period ?? "")} · xám = EMA200${lv.stop != null ? ` · SL ${esc(p.r_atr)}×ATR` : ""}</p>`;
+  } catch (e) { box.innerHTML = note(`Không tải được nến: ${e.message}`, "err"); }
 }
 
 async function loadHistory() {

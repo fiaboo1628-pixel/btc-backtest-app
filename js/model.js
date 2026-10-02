@@ -134,3 +134,20 @@ export function pfVerdict(pf) {
   if (pf >= 1) return "yếu";
   return "lỗ";
 }
+
+/**
+ * Nến quanh một lệnh backtest (rows [ms, o, h, l, c, ema, atr] từ /api/tune/candles): chỉ số nến vào/ra,
+ * kênh thoát (đáy/đỉnh `exitN` nến TRƯỚC, như chiến lược) và mức SL ban đầu = rAtr × ATR nến tín hiệu.
+ */
+export function tradeLevels(rows, t, exitN, rAtr) {
+  const at = (ms) => { let i = -1; for (let k = 0; k < rows.length && rows[k][0] <= ms; k++) i = k; return i; };
+  const iIn = at(t.open_timestamp), iOut = at(t.close_timestamp);
+  const exit = rows.map((_, k) => {
+    if (!exitN || k < exitN) return null;
+    const w = rows.slice(k - exitN, k).map((r) => (t.is_short ? r[2] : r[3]));
+    return t.is_short ? Math.max(...w) : Math.min(...w);
+  });
+  const sig = rows[iIn - 1];
+  const stop = sig && rAtr ? t.open_rate + (t.is_short ? 1 : -1) * rAtr * sig[6] : null;
+  return { iIn, iOut, exit, stop };
+}
