@@ -1,6 +1,7 @@
 # Tạo fixture tests/fixtures/parity_trend_4h.json.gz: freqtrade backtest TrendBreakout 5 coin của bot trên dữ liệu Binance
 # thật (data.binance.vision), nến 4h, không nến chi tiết, tham số mặc định — để tests/parity_trend.test.mjs so từng lệnh
-# với backtest nhiều coin của app. Kết quả: artifact parity-trend (tải về, chép vào tests/fixtures/, commit).
+# với backtest nhiều coin của app. Fixture được commit thẳng lên nhánh đang chạy (commit của github-actions, không kích hoạt
+# workflow khác) và tải lên artifact parity-trend.
 name: parity-trend
 
 on:
@@ -12,6 +13,9 @@ on:
   push:
     branches: ["claude/**", "research/**"]
     paths: ["tools/export_parity_trend.py", "tools/parity_trend_cfg.json", ".github/workflows/parity-trend.yml"]
+
+permissions:
+  contents: write                                  # commit fixture lên nhánh
 
 jobs:
   fixture:
@@ -42,10 +46,19 @@ jobs:
           python run_futures.py backtesting -c /tmp/par/cfg.json --userdir /tmp/par/ud --datadir /tmp/par/data \
             --strategy-path /tmp/par/ud/strategies --strategy TrendBreakout --timerange $TIMERANGE --export trades \
             --backtest-directory /tmp/par/ud/backtest_results --cache none | tail -40
-      - name: Xuất fixture và chạy test parity với fixture mới
+      - name: Xuất fixture
+        run: python tools/export_parity_trend.py /tmp/par /tmp/par/out
+      - name: Commit fixture lên nhánh
         run: |
-          python tools/export_parity_trend.py /tmp/par /tmp/par/out
-          PARITY_TREND_FIXTURE=/tmp/par/out/parity_trend_4h.json.gz node --test tests/parity_trend.test.mjs
+          mkdir -p tests/fixtures && cp /tmp/par/out/parity_trend_4h.json.gz tests/fixtures/
+          git config user.name github-actions && git config user.email github-actions@github.com
+          git add tests/fixtures/parity_trend_4h.json.gz
+          git diff --cached --quiet && echo "Fixture không đổi" || {
+            git commit -m "Fixture parity TrendBreakout 5 coin (freqtrade 2026.8, $TIMERANGE)"
+            git push
+          }
+      - name: Test parity với fixture mới
+        run: node --test tests/parity_trend.test.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
