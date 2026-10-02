@@ -121,7 +121,6 @@ function paint() {
   if (!root) return;
   const live = ctx.store.hub?.features?.live;
   const ch = info?.channels || {};
-  const none = live && info && !ch.telegram && !ch.devices;
   const incidents = info?.active || [];
 
   const channels = !live ? `<p class="hint">Hub chưa bật phần theo dõi bot nên chưa canh được bot.</p>`
@@ -132,8 +131,7 @@ function paint() {
         ${row("tg", ch.telegram ? "on" : "", "Telegram", ch.telegram ? "Hub gửi cảnh báo và báo cáo tuần qua Telegram" : "Chưa cấu hình · trên máy chủ chạy <code>setup --telegram</code>", st(ch.telegram ? "Connected" : "Not set", ch.telegram ? "on" : ""))}
         ${row("shield", incidents.length ? "bad" : "on", "Incidents", incidents.length ? "Sự cố hub đang báo, kiểm tra lại mỗi phút" : "Không có sự cố", st(incidents.length ? String(incidents.length) : "None", incidents.length ? "bad" : "on"))}
         ${incidents.map((a) => `<div class="incident">${esc(a)}</div>`).join("")}
-      </div>
-      ${none ? note("Chưa có kênh nào: nếu bot dừng hay mất stop, không ai được báo. Bật công tắc ở trên.", "warn") : ""}`;
+      </div>`;
 
   const recent = !live || infoErr ? "" : (info?.recent?.length
     ? `<div class="list">${info.recent.slice(0, 30).map((r) => `<div class="alert-row"><span>${esc(r.msg)}</span><small>${esc(dateTime(r.t * 1000))} · ${esc(ago(r.t * 1000))}${r.ok === false ? ' · <span class="down">không gửi được</span>' : ""}</small></div>`).join("")}</div>`

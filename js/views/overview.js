@@ -66,7 +66,6 @@ function paint(store) {
   const halt = live.halt || { threshold_pct: 15, current_dd_pct: 0, max_dd_pct: 0 };
   const days = (live.daily || []).slice().reverse();
   const eq = (live.equity || []).length >= 2 ? live.equity : null;
-  const noAlert = live.alerts === false;
   const fresh = freshness(store.liveAt, store.failedSince, ago);
 
   root.innerHTML = `<div class="cards">
@@ -75,7 +74,6 @@ function paint(store) {
     ${card("", `<div class="mode-card ${m.cls}" style="border:0;padding:0;box-shadow:none;background:none">
         <div><span class="mode-name">${esc(m.name)}</span><p class="hint">${esc(m.help)} ${live.exchange ? `· ${esc(live.exchange)}` : ""}</p></div></div>
       ${statusBlock(live)}
-      ${noAlert ? `<div class="msg warn">Chưa có kênh cảnh báo: nếu bot dừng hay mất stop, không ai được báo. Bật ở màn <a href="#alerts">Alerts</a>.</div>` : ""}
       <p class="hint">${esc(live.strategy || "")} · ${esc(live.timeframe || "")} · bot kiểm tra ${live.last_process_ts ? esc(ago(live.last_process_ts * 1000)) : "–"}</p>`, { wide: true })}
 
     ${card("Balance", `
