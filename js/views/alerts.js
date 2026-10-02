@@ -96,7 +96,7 @@ function weeklyHtml(w) {
     return `<tr><td>${esc(name)}</td><td>${s.n}</td><td>${s.win_pct != null ? pct(s.win_pct, 0) : "–"}</td><td>${s.pf == null ? "∞" : fmt(s.pf, 2)}</td><td class="${s.pnl_pct > 0 ? "up" : s.pnl_pct < 0 ? "down" : ""}">${signedPct(s.pnl_pct, 1)}</td><td>${pct(s.dd_pct, 1)}</td></tr>`;
   };
   return `<div class="tablewrap"><table><thead><tr><th>Bot</th><th>Trades</th><th>Win</th><th>PF</th><th>P&L</th><th>DD</th></tr></thead>
-    <tbody>${r("Demo / live", w.demo)}${r("Paper", w.paper)}</tbody></table></div>
+    <tbody>${r("Live", w.demo)}${r("Paper", w.paper)}</tbody></table></div>
     ${w.match ? `<p class="hint">Demo và paper trùng ${w.match.both} lệnh (Demo ${w.match.demo}, paper ${w.match.paper}). Paper chạy dry-run trên nến sàn thật nên là "lệnh mô phỏng" để so.</p>` : ""}
     <pre class="pre">${esc(w.text || "")}</pre>`;
 }
