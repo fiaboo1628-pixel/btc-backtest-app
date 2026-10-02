@@ -247,6 +247,14 @@ tfoot td { font-weight: 600; }
 .chart .lbl { font-size: 11px; fill: var(--text); } .chart .lbl.muted { fill: var(--muted); }
 .chart .bup { fill: var(--up); } .chart .bdown { fill: var(--down); } .chart .bzero { fill: var(--line-2); }
 .chart-empty { color: var(--muted); font-size: 13px; padding: 14px 0; text-align: center; }
+.chart.candles .cup { stroke: var(--up); fill: var(--up); } .chart.candles .cdown { stroke: var(--down); fill: var(--down); }
+.chart.candles .hold { opacity: .1; } .chart.candles .hold.win { fill: var(--up); } .chart.candles .hold.loss { fill: var(--down); }
+.chart.candles .ema { fill: none; stroke: var(--muted); stroke-width: 1.2; } .chart.candles .xch { fill: none; stroke: #e0a000; stroke-width: 1.2; stroke-dasharray: 3 3; }
+.chart.candles line.entry, .chart.candles line.exit, .chart.candles line.stop { stroke-width: 1; stroke-dasharray: 5 3; }
+.chart.candles line.entry { stroke: var(--text); } .chart.candles line.stop { stroke: var(--down); } .chart.candles line.exit.up { stroke: var(--up); } .chart.candles line.exit.down { stroke: var(--down); }
+.chart.candles text.stop, .chart.candles text.down { fill: var(--down); } .chart.candles text.up { fill: var(--up); }
+.chart.candles .mk-in { fill: #2f81f7; } .chart.candles .mk-out { fill: #e0a000; }
+.tr[data-ti] { cursor: pointer; } .tchart { padding: 4px 0 10px; } .tchart .hint { margin: 4px 0 0; }
 details.more > summary { cursor: pointer; color: var(--muted); font-size: 13.5px; padding: 8px 0; list-style: none; min-height: 44px; display: flex; align-items: center; }
 details.more > summary::before { content: "▸"; margin-right: 6px; } details.more[open] > summary::before { content: "▾"; }
 .logs p { font-size: 12.5px; margin: 6px 0; word-break: break-word; } .logs small { color: var(--muted); margin-right: 6px; }

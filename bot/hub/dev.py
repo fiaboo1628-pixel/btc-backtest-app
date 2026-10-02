@@ -224,6 +224,19 @@ def fake_ranges(data_dir, pairs, tfs):
     return out
 
 
+def fake_candles(data_dir, pair, tf, start_ms, end_ms, before=80, after=20, cap=600):
+    """Nến 4h giả (đi bộ ngẫu nhiên) quanh lệnh, cho màn Backtest bấm vào lệnh."""
+    rnd, h4 = random.Random(start_ms), 4 * 3600_000
+    t0 = start_ms // h4 * h4 - before * h4
+    n = min(cap, before + (end_ms - start_ms) // h4 + 1 + after)
+    c = PRICE[pair.split("/")[0]]; rows, ema = [], c
+    for i in range(n):
+        o = c; c = o * (1 + rnd.gauss(0.001, 0.02)); hi = max(o, c) * (1 + rnd.random() * 0.01); lo = min(o, c) * (1 - rnd.random() * 0.01)
+        ema += (c - ema) * 2 / 201
+        rows.append([t0 + i * h4, o, hi, lo, c, ema, o * 0.02])
+    return rows
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Hub giả để xem app")
     ap.add_argument("--scenario", default="demo", choices=["demo", "live", "paper", "halted", "offline", "empty"])
@@ -239,6 +252,7 @@ def main() -> None:
     tune.FtClient.call = call
     tune.load_schema = fake_schema
     tune.data_ranges = fake_ranges
+    tune.candle_window = fake_candles
 
     async def fake_download(self):
         await asyncio.sleep(1)
