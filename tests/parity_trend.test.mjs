@@ -25,7 +25,9 @@ test("khớp freqtrade từng lệnh (TrendBreakout, 5 coin chung tài khoản, 
     return { name: k.symbol, c, sig: buildSignals(strat, c, c), atr: I.atr(c.h, c.l, c.c, strat.exit.atrN), funding: k.funding,
       account: { priceSteps: k.priceSteps, priceStep: k.priceStepFallback, amountStep: k.amountStep } };
   });
-  const res = backtestPortfolio(pairs, { exit: strat.exit, account, maxOpen: fx.maxOpen, from: fx.start, to: fx.end });
+  // freqtrade bỏ nến đầu của khoảng (chỉ lấy tín hiệu), xử lý tới hết nến tại mốc cuối (chỉ thoát, không vào lệnh mới);
+  // app vẫn có thể vào lệnh ở nến cuối — lệnh đó đóng ngay vì hết dữ liệu ("end") nên không so
+  const res = backtestPortfolio(pairs, { exit: strat.exit, account, maxOpen: fx.maxOpen, from: fx.start + H, to: fx.end + H });
   const key = (x) => `${x.pair} ${x.dir > 0 ? "L" : "S"} ${x.entryT}`;
   const ref = new Map(fx.trades.filter((x) => x.reason !== "force_exit").map((x) => [key(x), x]));
   const mine = res.trades.filter((x) => x.reason !== "end");
@@ -42,7 +44,12 @@ test("khớp freqtrade từng lệnh (TrendBreakout, 5 coin chung tài khoản, 
     assert.equal(x.leverage, r.leverage, `${id}: đòn bẩy`);
     assert.ok(Math.abs(x.pnl - r.pnl) < 1e-4, `${id}: lãi/lỗ ${x.pnl} vs ${r.pnl}`);
   }
-  const s = stats(res, fx.wallet, fx.start, fx.end);
-  const refPct = fx.trades.reduce((a, x) => a + x.pnl, 0) / fx.wallet * 100;
-  assert.ok(Math.abs(s.profitPct - refPct) < 1e-3, `lợi nhuận ${s.profitPct} vs ${refPct}`);
+  // lệnh còn mở khi hết dữ liệu: freqtrade đóng ở giá MỞ nến cuối (force_exit), app ở giá đóng ("end") → chỉ so coin + chiều
+  // (bỏ lệnh app vào ngay nến cuối — freqtrade không vào lệnh ở nến cuối)
+  const left = fx.trades.filter((x) => x.reason === "force_exit").map((x) => `${x.pair} ${x.dir}`).sort();
+  assert.deepEqual(res.trades.filter((x) => x.reason === "end" && x.entryT < fx.end).map((x) => `${x.pair} ${x.dir}`).sort(), left,
+    "lệnh còn mở cuối kỳ");
+  const sum = (xs) => xs.reduce((a, x) => a + x.pnl, 0);
+  assert.ok(Math.abs(sum(mine) - sum([...ref.values()])) < 1e-3, `tổng lãi/lỗ các lệnh đã đóng ${sum(mine)} vs ${sum([...ref.values()])}`);
+  assert.ok(stats(res, fx.wallet, fx.start, fx.end).profitPct > 0 === fx.trades.reduce((a, x) => a + x.pnl, 0) > 0, "cùng dấu lợi nhuận");
 });

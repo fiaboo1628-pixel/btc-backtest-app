@@ -48,7 +48,8 @@ for pair in pairs:
     base = pair.split("/")[0]
     fn = f"{base}_USDT_USDT"
     d = pd.read_feather(F + f"{fn}-4h-futures.feather")
-    d = d[(d.date >= pd.Timestamp(data_from, unit="ms", tz="UTC")) & (d.date < pd.Timestamp(end, unit="ms", tz="UTC"))]
+    # freqtrade giữ cả nến tại mốc cuối (trim_dataframe: date <= stop) và xử lý nến đó như nến cuối: chỉ thoát, không vào
+    d = d[(d.date >= pd.Timestamp(data_from, unit="ms", tz="UTC")) & (d.date <= pd.Timestamp(end, unit="ms", tz="UTC"))]
     fr = pd.read_feather(F + f"{fn}-1h-funding_rate.feather")[["date", "open"]].rename(columns={"open": "rate"})
     mk = pd.read_feather(F + f"{fn}-1h-mark.feather")[["date", "open"]].rename(columns={"open": "mark"})
     x = fr.merge(mk, on="date")
