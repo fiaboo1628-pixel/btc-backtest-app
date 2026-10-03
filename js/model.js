@@ -151,3 +151,38 @@ export function tradeLevels(rows, t, exitN, rAtr) {
   const stop = sig && rAtr ? t.open_rate + (t.is_short ? 1 : -1) * rAtr * sig[6] : null;
   return { iIn, iOut, exit, stop };
 }
+
+/** "20210101-20250101" (--timerange của freqtrade) → [từ ms, tới ms] theo UTC; thiếu đầu = 0, thiếu cuối = `now`. */
+export function timerangeMs(tr, now = Date.now()) {
+  const p = (s) => (/^\d{8}$/.test(s || "") ? Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8)) : null);
+  const [a, b] = String(tr || "").split("-");
+  return [p(a) ?? 0, p(b) ?? now];
+}
+
+/** Lệnh đã đóng, theo thứ tự đóng tăng dần (replayState/equityCurve cần thứ tự này). */
+export const sortByClose = (trades) => (trades || []).filter((t) => t.close_timestamp != null).sort((a, b) => a.close_timestamp - b.close_timestamp);
+
+/**
+ * Tài khoản tại thời điểm `atMs` khi chạy lại backtest: vốn = ban đầu + lãi/lỗ các lệnh đóng ≤ atMs, số lệnh đóng/thắng,
+ * sụt vốn lớn nhất tới lúc đó, số lệnh đang mở. `sorted` từ sortByClose (mọi coin).
+ */
+export function replayState(sorted, atMs, wallet) {
+  let bal = wallet, closed = 0, wins = 0, peak = wallet, dd = 0, open = 0;
+  for (const t of sorted || []) {
+    if (t.close_timestamp > atMs) { if (t.open_timestamp <= atMs) open++; continue; }
+    bal += t.profit_abs || 0; closed++;
+    if ((t.profit_abs || 0) > 0) wins++;
+    peak = Math.max(peak, bal);
+    if (peak > 0) dd = Math.max(dd, 1 - bal / peak);
+  }
+  return { balance: bal, pnl: bal - wallet, pnlPct: wallet ? ((bal - wallet) / wallet) * 100 : 0,
+    closed, wins, winrate: closed ? (100 * wins) / closed : null, open, maxDd: dd * 100 };
+}
+
+/** Đường vốn theo từng lệnh đóng: [[ms, vốn], …], bắt đầu [startMs, wallet]. `sorted` từ sortByClose. */
+export function equityCurve(sorted, wallet, startMs) {
+  const out = [[startMs, wallet]];
+  let bal = wallet;
+  for (const t of sorted || []) { bal += t.profit_abs || 0; out.push([t.close_timestamp, bal]); }
+  return out;
+}

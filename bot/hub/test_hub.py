@@ -541,6 +541,27 @@ def test_trade_candles_window(tmp_path, monkeypatch):
     assert c.get(f"/api/tune/candles?pair=ETH/USDT:USDT&start={t0}&end={t0}", headers=TS).status_code == 400
 
 
+def test_chart_candles_whole_range_capped(tmp_path, monkeypatch):
+    import pandas as pd
+
+    c, futures = _tune_app(tmp_path, monkeypatch, {}, [])
+    futures.mkdir(parents=True)
+    n, h4 = 300, 4 * 3600_000
+    pd.DataFrame({"date": pd.date_range("2024-01-01", periods=n, freq="4h", tz="UTC"),
+                  **{k: [float(i) for i in range(n)] for k in ("open", "high", "low", "close")},
+                  "volume": 1.0}).to_feather(futures / "BTC_USDT_USDT-4h-futures.feather")
+    t0 = int(pd.Timestamp("2024-01-01", tz="UTC").timestamp() * 1000)
+    j = c.get(f"/api/tune/chart?pair=BTC/USDT:USDT&start={t0 + 10 * h4}&end={t0 + 50 * h4}", headers=TS).json()
+    assert j["tf"] == "4h" and not j["more"] and len(j["candles"]) == 41 and j["candles"][0][0] == t0 + 10 * h4   # không thêm nến trước/sau
+    j = c.get(f"/api/tune/chart?pair=BTC/USDT:USDT&start=0&end={t0 + 10 ** 12}", headers=TS).json()
+    assert len(j["candles"]) == n                                                                                  # cả file
+    monkeypatch.setattr(tune, "CHART_CAP", 100)
+    j = c.get(f"/api/tune/chart?pair=BTC/USDT:USDT&start=0&end={t0 + 10 ** 12}", headers=TS).json()
+    assert len(j["candles"]) == 100 and j["more"]
+    assert c.get(f"/api/tune/chart?pair=ETH/USDT:USDT&start=0&end=1", headers=TS).status_code == 400
+    assert c.get(f"/api/tune/chart?pair=BTC/USDT:USDT&start={t0 + 10 ** 12}&end={t0 + 10 ** 12 + 1}", headers=TS).status_code == 200  # nến cuối
+
+
 def test_labdata_command_and_temp_config(tmp_path):
     import labdata
 

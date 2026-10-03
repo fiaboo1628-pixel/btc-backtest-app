@@ -20,6 +20,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 DETAIL_TF = "15m"              # nến chi tiết để khớp lệnh trong nến tín hiệu (--timeframe-detail)
+CHART_CAP = 20_000             # nến tối đa cho biểu đồ chạy lại cả giai đoạn (4h × 20 000 ≈ 9 năm)
 
 # Nhãn ngắn (tiếng Anh, hiện trên form) + giải thích tiếng Việt cho từng tham số. Tham số nào không có ở đây vẫn hiện, với tên gốc.
 LABELS: dict[str, tuple[str, str]] = {
@@ -394,6 +395,18 @@ def router(cfg: dict, updater=None) -> APIRouter:
         if not rows:
             raise HTTPException(404, f"LAB không có nến {tf} của {pair}")
         return {"tf": tf, "candles": rows}
+
+    @r.get("/chart")
+    async def chart_candles(pair: str, start: int, end: int):
+        """Toàn bộ nến khung của bot của một coin trong khoảng backtest: màn Backtest chạy lại từng lệnh trên biểu đồ
+        (kiểu Visual mode của MT5). Cùng dạng hàng với /candles; quá CHART_CAP nến thì cắt và báo more."""
+        if pair not in bot_pairs(cfg):
+            raise HTTPException(400, "Coin không thuộc bot")
+        tf = json.loads(Path(cfg["bot_config"]).read_text(encoding="utf-8"))["timeframe"]
+        rows = await asyncio.to_thread(candle_window, data_dir, pair, tf, start, end, 0, 0, CHART_CAP)
+        if not rows:
+            raise HTTPException(404, f"LAB không có nến {tf} của {pair}")
+        return {"tf": tf, "candles": rows, "more": len(rows) >= CHART_CAP}
 
     @r.get("/history")
     async def history():

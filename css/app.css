@@ -255,6 +255,23 @@ tfoot td { font-weight: 600; }
 .chart.candles text.stop, .chart.candles text.down { fill: var(--down); } .chart.candles text.up { fill: var(--up); }
 .chart.candles .mk-in { fill: #2f81f7; } .chart.candles .mk-out { fill: #e0a000; }
 .tr[data-ti] { cursor: pointer; } .tchart { padding: 4px 0 10px; } .tchart .hint { margin: 4px 0 0; }
+.linkbtn { font: inherit; font-size: inherit; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; min-height: 24px; }
+
+/* ---------- chạy lại backtest trên biểu đồ (js/replay.js) */
+.replay { display: grid; gap: 6px; }
+.rp-bar { display: flex; gap: 4px 8px; align-items: center; flex-wrap: wrap; justify-content: space-between; }
+.rp-grp { display: inline-flex; gap: 2px; align-items: center; }
+.rp-bar .ibtn { color: var(--text); background: var(--panel-2); border-radius: 8px; }
+.rp-bar .rp-grp:first-child .ibtn:nth-child(2) { color: var(--accent); }
+.rp-bar .ibtn[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent); }
+.rp-speed { font: inherit; font-size: 13px; min-height: 36px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel-2); color: var(--text); padding: 0 6px; }
+.rp-price { width: 100%; height: 300px; display: block; touch-action: none; cursor: crosshair; border-radius: 10px; background: var(--panel-2); outline-offset: 0; }
+@media (min-width: 900px) { .rp-price { height: 420px; } }
+.rp-equity { width: 100%; height: 90px; display: block; border-radius: 10px; background: var(--panel-2); }
+.rp-scrub { width: 100%; height: 32px; accent-color: var(--accent); margin: 0; }
+.replay .rp-stats { margin: 0; }
+.replay .kpi-value small { font-size: 11.5px; color: var(--muted); font-weight: 400; }
+.rp-info { min-height: 1.4em; margin: 0; font-variant-numeric: tabular-nums; word-break: break-word; }
 details.more > summary { cursor: pointer; color: var(--muted); font-size: 13.5px; padding: 8px 0; list-style: none; min-height: 44px; display: flex; align-items: center; }
 details.more > summary::before { content: "▸"; margin-right: 6px; } details.more[open] > summary::before { content: "▾"; }
 .logs p { font-size: 12.5px; margin: 6px 0; word-break: break-word; } .logs small { color: var(--muted); margin-right: 6px; }

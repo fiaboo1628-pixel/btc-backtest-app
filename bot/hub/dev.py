@@ -9,6 +9,8 @@ halted (đã tự dừng vì sụt vốn), offline (bot không trả lời), emp
 """
 import argparse
 import asyncio
+import bisect
+import calendar
 import random
 import sys
 import tempfile
@@ -209,8 +211,17 @@ class FakeBots:
             "winrate": 0.32, "profit_factor": round(rnd.uniform(1.0, 1.7), 2), "cagr": ((bal / wallet) ** (365 / max(1, len(daily))) - 1),
             "market_change": rnd.uniform(-0.2, 1.5), "periodic_breakdown": {"year": list(years.values())},
             "results_per_pair": pairs, "stake_currency": "USDT",
-            "trades": [x for x in make_trades(total, int(time.mktime((y0, 1, 1, 0, 0, 0, 0, 0, 0)) * 1000), seed=3)
+            "trades": [price_trade(x) for x in make_trades(total, int(time.mktime((y0, 1, 1, 0, 0, 0, 0, 0, 0)) * 1000), seed=3)
                        if x["close_timestamp"] < end * 1000]}}}
+
+
+def price_trade(t: dict) -> dict:
+    """Giá vào/ra của lệnh backtest giả lấy từ nến giả (để mũi tên nằm trên nến), lãi/lỗ tính lại theo giá: 50 USDT × 5x."""
+    o, c = price_at(t["pair"], t["open_timestamp"]), price_at(t["pair"], t["close_timestamp"])
+    r = (c / o - 1) * (-1 if t["is_short"] else 1)
+    pnl = round(r * 250, 2)
+    return {**t, "open_rate": o, "close_rate": c, "profit_abs": pnl, "profit_ratio": pnl / 50, "profit_pct": round(pnl / 50 * 100, 2),
+            "exit_reason": "exit_signal" if pnl > 0 else t["exit_reason"] if t["exit_reason"] != "exit_signal" else "stop_loss"}
 
 
 def fake_ranges(data_dir, pairs, tfs):
@@ -224,17 +235,42 @@ def fake_ranges(data_dir, pairs, tfs):
     return out
 
 
+H4 = 4 * 3600_000
+T0 = calendar.timegm((2021, 1, 1, 0, 0, 0)) * 1000
+_SERIES: dict[str, list] = {}
+
+
+def series(pair: str) -> list:
+    """Nến 4h giả của một coin từ 2021 tới giờ, cố định theo tên coin (đi bộ ngẫu nhiên theo log, kéo nhẹ về giá hiện tại)."""
+    if pair not in _SERIES:
+        import math
+
+        coin = pair.split("/")[0]
+        rnd, target = random.Random(coin), math.log(PRICE[coin])
+        n = (int(time.time() * 1000) - T0) // H4
+        lp, ema, rows = target - 1.2, PRICE[coin] * 0.3, []
+        for i in range(n):
+            o = math.exp(lp)
+            lp += rnd.gauss(0, 0.012) + 0.0015 * (target - lp)
+            c = math.exp(lp)
+            hi = max(o, c) * (1 + abs(rnd.gauss(0, 0.006))); lo = min(o, c) * (1 - abs(rnd.gauss(0, 0.006)))
+            ema += (c - ema) * 2 / 201
+            rows.append([T0 + i * H4, round(o, 6), round(hi, 6), round(lo, 6), round(c, 6), round(ema, 6), round(o * 0.02, 6)])
+        _SERIES[pair] = rows
+    return _SERIES[pair]
+
+
+def price_at(pair: str, ms: int) -> float:
+    s = series(pair)
+    return s[max(0, min(len(s) - 1, bisect.bisect_right([r[0] for r in s], ms) - 1))][4]
+
+
 def fake_candles(data_dir, pair, tf, start_ms, end_ms, before=80, after=20, cap=600):
-    """Nến 4h giả (đi bộ ngẫu nhiên) quanh lệnh, cho màn Backtest bấm vào lệnh."""
-    rnd, h4 = random.Random(start_ms), 4 * 3600_000
-    t0 = start_ms // h4 * h4 - before * h4
-    n = min(cap, before + (end_ms - start_ms) // h4 + 1 + after)
-    c = PRICE[pair.split("/")[0]]; rows, ema = [], c
-    for i in range(n):
-        o = c; c = o * (1 + rnd.gauss(0.001, 0.02)); hi = max(o, c) * (1 + rnd.random() * 0.01); lo = min(o, c) * (1 - rnd.random() * 0.01)
-        ema += (c - ema) * 2 / 201
-        rows.append([t0 + i * h4, o, hi, lo, c, ema, o * 0.02])
-    return rows
+    """Nến 4h giả quanh lệnh (màn Backtest bấm vào lệnh) hoặc cả giai đoạn (biểu đồ chạy lại), cùng cách cắt như tune.candle_window."""
+    s = series(pair); ts = [r[0] for r in s]
+    i0 = max(0, bisect.bisect_right(ts, start_ms) - 1 - before)
+    i1 = min(len(s), bisect.bisect_right(ts, end_ms) + after, i0 + cap)
+    return s[i0:i1]
 
 
 def main() -> None:
