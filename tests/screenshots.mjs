@@ -46,6 +46,13 @@ async function shoot(width, dark) {
         await check(page, width, "backtest-result");
         await page.addStyleTag({ content: STATIC_BARS });
         await page.locator("#resultBox").screenshot({ path: `${OUT}/${tag}-backtest-result.png` });
+        await page.waitForFunction(() => document.querySelector("#chartBox .rp-price"), null, { timeout: 30000 }).catch(() => problems.push(`[${width}] biểu đồ chạy lại không hiện`));
+        await page.waitForTimeout(400);
+        await page.locator("#chartBox .rp-price").click({ position: { x: 60, y: 60 } }).catch(() => {});   // ghim chữ thập để thấy dòng thông tin nến
+        await page.locator('#chartBox [data-rp="step"]').click().catch(() => {});                           // có con trỏ thời gian
+        await page.waitForTimeout(300);
+        await check(page, width, "backtest-chart");
+        await page.locator("#chartBox").screenshot({ path: `${OUT}/${tag}-backtest-chart.png` });
         // đổi một tham số rồi mở hộp xác nhận
         await page.fill("#p_entry_period", "25");
         await page.dispatchEvent("#p_entry_period", "change");

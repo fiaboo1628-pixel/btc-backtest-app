@@ -1,9 +1,11 @@
 // Màn Backtest / Parameters: thay trang /tune/ cũ. Chỉnh tham số theo schema của hub, chạy backtest freqtrade ở LAB
-// (/api/tune/backtest), xem kết quả theo năm / theo coin, lịch sử các lần thử, áp dụng cho bot sau khi xác nhận.
-import { cls, fmt, isoDay, modeInfo, money, pct, price, signed, signedPct, dateTime } from "../format.js";
-import { clampParam, diffParams, rangePresets, sameParams, timerange, tradeLevels } from "../model.js";
+// (/api/tune/backtest), xem kết quả theo năm / theo coin, chạy lại trên biểu đồ nến (kiểu Visual mode của MT5, js/replay.js),
+// lịch sử các lần thử, áp dụng cho bot sau khi xác nhận.
+import { cls, fmt, isoDay, modeInfo, money, pct, price, signed, signedMoney, signedPct, dateTime } from "../format.js";
+import { clampParam, diffParams, rangePresets, sameParams, timerange, timerangeMs, tradeLevels } from "../model.js";
 import { card, confirm, errorBox, esc, loading, note, toast, $, $$ } from "../ui.js";
 import { candleChart, lineChart } from "../chart.js";
+import { Replay } from "../replay.js";
 import { tradeRow } from "./trades.js";
 
 export const title = "Backtest";
@@ -11,7 +13,7 @@ export const title = "Backtest";
 const PAGE = 50;                     // số lệnh hiện mỗi lần bấm "More"
 const S = { schema: null, values: {}, bot: null, history: [], lastRun: null, polling: false, running: false, range: "all", wallet: 1000,
   from: "", to: "", resultMsg: "", resultKind: "err", topMsg: "", botErr: null,
-  trades: null, tcoin: "all", tshow: PAGE };
+  trades: null, tcoin: "all", tshow: PAGE, vcoin: "", chartCache: null, replay: null, focus: null };
 let root = null, ctx = null, pollTimer = null, botTimer = null;
 
 export function mount(el, c) {
@@ -28,7 +30,7 @@ export function mount(el, c) {
   init();
 }
 export function unmount() {
-  clearTimeout(pollTimer); clearInterval(botTimer); pollTimer = botTimer = null; S.polling = false;
+  clearTimeout(pollTimer); clearInterval(botTimer); pollTimer = botTimer = null; S.polling = false; destroyReplay();
   root?.removeEventListener("click", onClick); root?.removeEventListener("input", onInput); root?.removeEventListener("change", onChange); root?.removeEventListener("keydown", onKey);
   root = null;
 }
@@ -98,6 +100,7 @@ function render() {
         <button class="btn sm" type="button" data-act="live" title="Lấy lại bộ tham số bot đang chạy">Load live</button>
       </div>`)}
     ${card("Result", `<div id="resultMsg"></div><div class="progress hidden" id="prog"><i></i></div><div id="result"><p class="hint">Chưa chạy lần nào trong phiên này. Chỉnh tham số rồi bấm <b>Run backtest</b>.</p></div>`, { wide: true, id: "resultBox" })}
+    ${card("Visual backtest", `<div id="btChart"><p class="hint">Chạy backtest để xem lại từng lệnh trên biểu đồ nến.</p></div>`, { wide: true, id: "chartBox" })}
     ${card("Trades", `<div id="btTrades"><p class="hint">Chạy backtest để xem từng lệnh.</p></div>`, { wide: true, id: "tradesBox" })}
     ${card("Recent runs", `<div id="hist"><p class="hint">Chưa có.</p></div>`, { wide: true, id: "histBox" })}
     <div class="actionbar wide">
@@ -226,6 +229,12 @@ function onClick(e) {
     $$("button[data-range]", root).forEach((c) => c.setAttribute("aria-pressed", c.dataset.range === r.id));
   } else if (b.dataset.tcoin) {
     S.tcoin = b.dataset.tcoin; S.tshow = PAGE; paintTrades();
+  } else if (b.dataset.vcoin) {
+    S.vcoin = b.dataset.vcoin; paintChart();
+  } else if (b.dataset.goto != null) {
+    const t = S.tlist[Number(b.dataset.goto)];
+    S.focus = t; S.vcoin = t.pair; paintChart();
+    $("#chartBox", root)?.scrollIntoView({ behavior: "smooth", block: "start" });
   } else if (b.dataset.act === "more") {
     S.tshow += PAGE * 4; paintTrades();
   } else if (b.dataset.act === "default") {
@@ -241,7 +250,7 @@ function onClick(e) {
 // ---------------------------------------------------------------- backtest
 async function runBacktest() {
   if (!S.from) { toast("Chọn ngày bắt đầu.", "err"); return; }
-  S.resultMsg = ""; S.running = true; syncInputs(); paintResult(); paintTrades();
+  S.resultMsg = ""; S.running = true; syncInputs(); paintResult(); paintTrades(); paintChart();
   try {
     const r = await ctx.api("/api/tune/backtest", { method: "POST", body: { params: S.values, timerange: timerange(S.from, S.to), wallet: S.wallet } });
     if (r.warnings?.length) toast(r.warnings[0], "info", 6000);
@@ -277,9 +286,50 @@ async function poll() {
 }
 
 async function loadTrades() {
-  if (!S.lastRun || S.trades?.at === S.lastRun.at) { paintTrades(); return; }
+  if (!S.lastRun || S.trades?.at === S.lastRun.at) { paintTrades(); paintChart(); return; }
   try { S.trades = await ctx.api("/api/tune/trades"); S.tcoin = "all"; S.tshow = PAGE; } catch { S.trades = null; }
-  paintTrades();
+  paintTrades(); paintChart();
+}
+
+/** Lần chạy nào có lệnh thì vẽ được: coin có lệnh (nhiều lệnh trước), chọn coin → tải nến cả giai đoạn → Replay. */
+function paintChart() {
+  const box = $("#btChart", root);
+  if (!box) return;
+  const all = S.trades?.trades || [];
+  if (S.running) { destroyReplay(); box.innerHTML = `<p class="hint">Đang chạy backtest…</p>`; return; }
+  if (!S.trades || S.trades.at !== S.lastRun?.at) { destroyReplay(); box.innerHTML = `<p class="hint">Chạy backtest để xem lại từng lệnh trên biểu đồ nến.</p>`; return; }
+  if (!all.length) { destroyReplay(); box.innerHTML = `<p class="hint">Lần chạy này không có lệnh nào.</p>`; return; }
+  const count = {};
+  for (const t of all) count[t.pair] = (count[t.pair] || 0) + 1;
+  const pairs = Object.keys(count).sort((a, b) => count[b] - count[a] || a.localeCompare(b));
+  if (!pairs.includes(S.vcoin)) S.vcoin = pairs[0];
+  box.innerHTML = `<div class="chips scroll" role="group" aria-label="Coin on chart">
+      ${pairs.map((p) => `<button class="chip" type="button" data-vcoin="${esc(p)}" aria-pressed="${S.vcoin === p}">${esc(p.split("/")[0])} · ${count[p]}</button>`).join("")}
+    </div><div id="rpBox"></div>`;
+  loadChart();
+}
+
+function destroyReplay() { S.replay?.destroy(); S.replay = null; }
+
+/** Nến khung của bot của coin đang chọn trong khoảng backtest (nhớ theo lần chạy + coin, đổi qua lại không tải lại). */
+async function loadChart() {
+  const run = S.lastRun, pair = S.vcoin, key = `${run.at}|${pair}`, box = $("#rpBox", root);
+  destroyReplay();
+  if (!S.chartCache || S.chartCache.at !== run.at) S.chartCache = { at: run.at };
+  let d = S.chartCache[key];
+  if (!d) {
+    box.innerHTML = loading("Đang tải nến cả giai đoạn…");
+    const [start, end] = timerangeMs(run.timerange);
+    try { d = await ctx.api(`/api/tune/chart?${new URLSearchParams({ pair, start, end })}`, { timeout: 60000 }); }
+    catch (e) { if (box.isConnected) box.innerHTML = note(`Không tải được nến: ${e.message}${e.hint ? ` — ${e.hint}` : ""}`, "err"); return; }
+    S.chartCache[key] = d;
+  }
+  if (!box.isConnected || S.vcoin !== pair || S.lastRun !== run) return;       // đã đổi coin / chạy lại trong lúc tải
+  const cur = run.result.stake_currency || "USDT";
+  S.replay = new Replay(box, { candles: d.candles, tf: d.tf, trades: S.trades.trades.filter((t) => t.pair === pair), allTrades: S.trades.trades,
+    wallet: run.wallet ?? S.wallet, cur, fmt: { price, num: (v) => fmt(v, 0), money: (v) => signedMoney(v, cur, 2), time: dateTime } });
+  if (S.focus) { S.replay.focus(S.focus); S.focus = null; }
+  if (d.more) box.insertAdjacentHTML("beforeend", note(`Chỉ hiện ${d.candles.length} nến đầu của khoảng này.`, "warn"));
 }
 
 /** Lệnh của lần backtest gần nhất: lọc theo coin, hiện dần từng trang (hơn nghìn lệnh vẽ một lần thì chậm trên điện thoại). */
@@ -316,7 +366,8 @@ async function toggleChart(row) {
     const p = S.lastRun?.params || {};
     const lv = tradeLevels(d.candles, t, p.exit_period, p.r_atr);
     box.innerHTML = candleChart(d.candles, t, lv, { w: Math.max(280, box.clientWidth), fmtY: price, fmtX: dateTime })
-      + `<p class="hint">${esc(d.tf)} · ${lv.iOut - lv.iIn} nến · <span style="color:#2f81f7">▲</span> vào <span style="color:#e0a000">▼</span> ra · vàng = kênh thoát ${esc(p.exit_period ?? "")} · xám = EMA200${lv.stop != null ? ` · SL ${esc(p.r_atr)}×ATR` : ""}</p>`;
+      + `<p class="hint">${esc(d.tf)} · ${lv.iOut - lv.iIn} nến · <span style="color:#2f81f7">▲</span> vào <span style="color:#e0a000">▼</span> ra · vàng = kênh thoát ${esc(p.exit_period ?? "")} · xám = EMA200${lv.stop != null ? ` · SL ${esc(p.r_atr)}×ATR` : ""}
+        · <button class="linkbtn" type="button" data-goto="${esc(row.dataset.ti)}">Xem trên biểu đồ lớn</button></p>`;
   } catch (e) { box.innerHTML = note(`Không tải được nến: ${e.message}`, "err"); }
 }
 

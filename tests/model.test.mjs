@@ -89,3 +89,22 @@ test("nến của lệnh backtest: vị trí vào/ra, kênh thoát, SL ban đầ
   const short = m.tradeLevels(rows, { open_timestamp: 0, close_timestamp: H, open_rate: 10, is_short: true }, 2, 3);
   assert.equal(short.exit[2], 13); assert.equal(short.stop, null);   // nến đầu: chưa có nến tín hiệu
 });
+
+test("chạy lại backtest: khoảng thời gian, tài khoản tại một thời điểm, đường vốn", () => {
+  assert.deepEqual(m.timerangeMs("20210101-20250101"), [Date.UTC(2021, 0, 1), Date.UTC(2025, 0, 1)]);
+  assert.deepEqual(m.timerangeMs("20210101-", 5), [Date.UTC(2021, 0, 1), 5]);
+  assert.deepEqual(m.timerangeMs("", 5), [0, 5]);
+  const tr = m.sortByClose([
+    { open_timestamp: 50, close_timestamp: 90, profit_abs: -30 },
+    { open_timestamp: 10, close_timestamp: 20, profit_abs: 50 },
+    { open_timestamp: 30, close_timestamp: null, profit_abs: 0 },      // đang mở: không tính vốn
+  ]);
+  assert.deepEqual(tr.map((t) => t.close_timestamp), [20, 90]);
+  const s = m.replayState(tr, 60, 1000);
+  assert.equal(s.balance, 1050); assert.equal(s.closed, 1); assert.equal(s.wins, 1); assert.equal(s.open, 1); assert.equal(s.maxDd, 0);
+  const e = m.replayState(tr, 100, 1000);
+  assert.equal(e.balance, 1020); assert.equal(e.closed, 2); assert.equal(e.winrate, 50); assert.equal(e.open, 0);
+  assert.ok(Math.abs(e.maxDd - 100 * 30 / 1050) < 1e-9); assert.equal(e.pnlPct, 2);
+  assert.deepEqual(m.replayState(tr, 5, 1000), { balance: 1000, pnl: 0, pnlPct: 0, closed: 0, wins: 0, winrate: null, open: 0, maxDd: 0 });
+  assert.deepEqual(m.equityCurve(tr, 1000, 0), [[0, 1000], [20, 1050], [90, 1020]]);
+});
